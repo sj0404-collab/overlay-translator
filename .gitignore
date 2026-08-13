@@ -9,3 +9,7 @@ app/build/
 *.aab
 dist/
 tools/fonts/
+base.tar.xz
+gh.tar.xz
+split_config.arm64_v8a.tar.xz
+*.tar.xz

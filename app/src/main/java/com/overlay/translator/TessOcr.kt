@@ -9,6 +9,9 @@ enum class ScanLang { EN, RU, BOTH }
 class TessOcr(ctx: Context) {
     private val dataPath = AssetCopy.ensureTess(ctx).absolutePath
     private val api = TessBaseAPI()
+    private val enWl = loadDict(ctx, "labels/en_dict.txt")
+    private val laWl = loadDict(ctx, "labels/latin_dict.txt")
+    private val ruWl = loadDict(ctx, "labels/cyrillic_dict.txt")
     var lang: ScanLang = ScanLang.EN
         private set
 
@@ -25,19 +28,14 @@ class TessOcr(ctx: Context) {
             ScanLang.BOTH -> "eng+rus"
         }
         api.init(dataPath, code)
-        api.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
-        api.setVariable("tessedit_char_blacklist", "|[]{}<>")
-        when (l) {
-            ScanLang.EN -> api.setVariable(
-                "tessedit_char_whitelist",
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?;:'\"()-"
-            )
-            ScanLang.RU -> api.setVariable(
-                "tessedit_char_whitelist",
-                "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789 .,!?;:'\"()-"
-            )
-            ScanLang.BOTH -> {}
+        api.pageSegMode = TessBaseAPI.PageSegMode.PSM_SINGLE_BLOCK
+        api.setVariable("tessedit_char_blacklist", "|[]{}<>`")
+        val wl = when (l) {
+            ScanLang.EN -> if (enWl.isNotEmpty()) enWl else laWl
+            ScanLang.RU -> ruWl
+            ScanLang.BOTH -> laWl + ruWl
         }
+        if (wl.isNotEmpty()) api.setVariable("tessedit_char_whitelist", wl)
     }
 
     fun read(bmp: Bitmap): String {
@@ -51,5 +49,14 @@ class TessOcr(ctx: Context) {
 
     fun close() {
         try { api.recycle() } catch (_: Exception) {}
+    }
+
+    private fun loadDict(ctx: Context, path: String): String {
+        return runCatching {
+            ctx.assets.open(path).bufferedReader().readLines()
+                .map { it.trim('\r', '\n') }
+                .filter { it.isNotEmpty() }
+                .joinToString("")
+        }.getOrDefault("")
     }
 }
