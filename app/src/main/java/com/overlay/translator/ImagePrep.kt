@@ -155,8 +155,7 @@ object ImagePrep {
         s = s.replace(Regex("(?i)mymemory"), "")
         s = s.replace(Regex("(?i)только онлайн"), "")
         if (english) {
-            s = s.filter { it.code < 128 || it.isWhitespace() }
-            s = s.replace(Regex("[^A-Za-z0-9 .,!?;:'\"()\\-…]"), " ")
+            s = s.replace(Regex("[^A-Za-z0-9 .,!?;:'\"()\\-]"), " ")
         } else {
             s = s.replace(Regex("[A-Za-z]{8,}"), " ")
         }
