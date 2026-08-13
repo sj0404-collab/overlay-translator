@@ -25,15 +25,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
-import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
-import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.google.mlkit.nl.translate.Translation
-import com.google.mlkit.nl.translate.Translator
-import com.google.mlkit.nl.translate.TranslatorOptions
 import com.overlay.translator.databinding.OverlayBubbleBinding
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,10 +35,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
         const val ACTION_REBIND = "rebind"
-        const val EXTRA_SRC = "src"
-        const val EXTRA_DST = "dst"
+        const val EXTRA_EN = "en"
         const val EXTRA_LIVE = "live"
         const val EXTRA_SPEAK = "speak"
+        const val EXTRA_VOICE = "voice"
+        const val EXTRA_VOICE_NAME = "voice_name"
+        const val EXTRA_TR = "tr"
         var projectionResultCode: Int = 0
         var projectionData: Intent? = null
     }
@@ -57,11 +50,15 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var resultView: View? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
+    private var vision: OnnxVision? = null
+    private var tess: TessOcr? = null
     private var translator: Translator? = null
-    private var srcLang = "en"
-    private var dstLang = "ru"
+    private var english = true
     private var live = true
     private var speak = true
+    private var voiceKind = VoiceKind.FEMALE
+    private var voiceName: String? = null
+    private var trMode = Translator.Mode.LOCAL_THEN_ONLINE
     private var region: RectF? = null
     private val handler = Handler(Looper.getMainLooper())
     private val busy = AtomicBoolean(false)
@@ -76,7 +73,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private val tick = object : Runnable {
         override fun run() {
             if (live && region != null) captureAndProcess()
-            handler.postDelayed(this, 1200)
+            handler.postDelayed(this, 1300)
         }
     }
 
@@ -85,28 +82,39 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        createChannel()
-        startForeground(1, notif("Overlay translator"))
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(NotificationChannel("ot", "Overlay", NotificationManager.IMPORTANCE_LOW))
+        startForeground(1, Notification.Builder(this, "ot")
+            .setContentTitle("Overlay Translator EN/RU")
+            .setContentText("OCR + русская озвучка")
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .build())
         tts = TextToSpeech(this, this)
         val dm = DisplayMetrics()
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels
         screenH = dm.heightPixels
         density = dm.densityDpi
+        Thread {
+            vision = OnnxVision(this)
+            tess = TessOcr(this)
+            translator = Translator(this)
+        }.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                stopSelf()
-                return START_NOT_STICKY
-            }
+            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
-                srcLang = intent.getStringExtra(EXTRA_SRC) ?: "en"
-                dstLang = intent.getStringExtra(EXTRA_DST) ?: "ru"
+                english = intent.getBooleanExtra(EXTRA_EN, true)
                 live = intent.getBooleanExtra(EXTRA_LIVE, true)
                 speak = intent.getBooleanExtra(EXTRA_SPEAK, true)
-                setupTranslator()
+                voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }.getOrDefault(VoiceKind.FEMALE)
+                voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
+                trMode = runCatching { Translator.Mode.valueOf(intent.getStringExtra(EXTRA_TR) ?: "LOCAL_THEN_ONLINE") }
+                    .getOrDefault(Translator.Mode.LOCAL_THEN_ONLINE)
+                tess?.setMode(english)
+                VoiceHelper.apply(tts, voiceKind, voiceName)
                 bindProjection()
                 showBubble()
                 handler.removeCallbacks(tick)
@@ -117,32 +125,19 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         return START_STICKY
     }
 
-    private fun setupTranslator() {
-        translator?.close()
-        val opt = TranslatorOptions.Builder()
-            .setSourceLanguage(srcLang)
-            .setTargetLanguage(dstLang)
-            .build()
-        translator = Translation.getClient(opt)
-        translator?.downloadModelIfNeeded()
-    }
-
     private fun bindProjection() {
         val data = projectionData ?: return
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         projection?.stop()
         projection = mpm.getMediaProjection(projectionResultCode, data)
         projection?.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() {
-                vdisplay?.release()
-            }
+            override fun onStop() { vdisplay?.release() }
         }, handler)
         reader?.close()
         reader = ImageReader.newInstance(screenW, screenH, PixelFormat.RGBA_8888, 2)
         vdisplay?.release()
         vdisplay = projection?.createVirtualDisplay(
-            "ocr",
-            screenW, screenH, density,
+            "ocr", screenW, screenH, density,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader?.surface, null, handler
         )
@@ -152,6 +147,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         if (bubble != null) return
         val bind = OverlayBubbleBinding.inflate(LayoutInflater.from(this))
         bubble = bind.root
+        bind.bubbleLabel.text = if (english) "EN→RU" else "RU"
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -160,22 +156,15 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.TOP or Gravity.START
-        lp.x = 40
-        lp.y = 200
-        var px = 0
-        var py = 0
+        lp.x = 40; lp.y = 200
+        var px = 0; var py = 0
         bind.root.setOnTouchListener { _, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    px = e.rawX.toInt(); py = e.rawY.toInt(); true
-                }
+                MotionEvent.ACTION_DOWN -> { px = e.rawX.toInt(); py = e.rawY.toInt(); true }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = e.rawX.toInt() - px
-                    val dy = e.rawY.toInt() - py
+                    lp.x += e.rawX.toInt() - px; lp.y += e.rawY.toInt() - py
                     px = e.rawX.toInt(); py = e.rawY.toInt()
-                    lp.x += dx; lp.y += dy
-                    wm.updateViewLayout(bind.root, lp)
-                    true
+                    wm.updateViewLayout(bind.root, lp); true
                 }
                 else -> false
             }
@@ -231,20 +220,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         Thread {
             try {
                 val img = reader?.acquireLatestImage()
-                if (img == null) {
-                    busy.set(false)
-                    return@Thread
-                }
+                if (img == null) { busy.set(false); return@Thread }
                 val plane = img.planes[0]
                 val buf = plane.buffer
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * screenW
-                val bmp = Bitmap.createBitmap(
-                    screenW + rowPadding / pixelStride,
-                    screenH,
-                    Bitmap.Config.ARGB_8888
-                )
+                val bmp = Bitmap.createBitmap(screenW + rowPadding / pixelStride, screenH, Bitmap.Config.ARGB_8888)
                 bmp.copyPixelsFromBuffer(buf)
                 img.close()
                 val crop = Rect(
@@ -253,88 +235,45 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     r.right.toInt().coerceIn(1, screenW),
                     r.bottom.toInt().coerceIn(1, screenH)
                 )
-                if (crop.width() < 8 || crop.height() < 8) {
-                    busy.set(false)
-                    return@Thread
-                }
+                if (crop.width() < 8 || crop.height() < 8) { busy.set(false); return@Thread }
                 val piece = Bitmap.createBitmap(bmp, crop.left, crop.top, crop.width(), crop.height())
                 bmp.recycle()
-                ocr(piece)
+                recognize(piece)
             } catch (_: Exception) {
                 busy.set(false)
             }
         }.start()
     }
 
-    private fun ocr(bmp: Bitmap) {
-        val rec = when (srcLang) {
-            "zh" -> TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            "ja" -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-            "ko" -> TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
-            else -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        }
-        rec.process(InputImage.fromBitmap(bmp, 0))
-            .addOnSuccessListener { t ->
-                val text = t.text.trim()
-                if (text.isBlank()) {
-                    busy.set(false)
-                    return@addOnSuccessListener
+    private fun recognize(raw: Bitmap) {
+        try {
+            val enhanced = vision?.enhance(raw) ?: raw
+            var text = tess?.read(enhanced).orEmpty()
+            if (text.length < 2) {
+                val crnn = vision?.crnnLine(enhanced).orEmpty()
+                if (crnn.length > text.length) text = crnn
+            }
+            text = text.replace(Regex("[\\r\\n]+"), " ").trim()
+            if (text.isBlank()) { busy.set(false); return }
+            val out = if (english) translator?.translate(text, trMode) ?: text else text
+            showResult(text, out)
+            if (speak && out != lastSpoken) {
+                lastSpoken = out
+                handler.post {
+                    VoiceHelper.apply(tts, voiceKind, voiceName)
+                    tts?.speak(out, TextToSpeech.QUEUE_FLUSH, null, "t")
                 }
-                translate(text)
             }
-            .addOnFailureListener { busy.set(false) }
-            .addOnCompleteListener { rec.close(); bmp.recycle() }
-    }
-
-    private fun translate(text: String) {
-        val tr = translator
-        if (tr == null) {
-            showResult(text, text)
-            maybeSpeak(text)
+        } finally {
             busy.set(false)
-            return
+            if (raw != null && !raw.isRecycled) raw.recycle()
         }
-        tr.downloadModelIfNeeded()
-            .addOnSuccessListener {
-                tr.translate(text)
-                    .addOnSuccessListener { out ->
-                        showResult(text, out)
-                        maybeSpeak(out)
-                    }
-                    .addOnCompleteListener { busy.set(false) }
-            }
-            .addOnFailureListener {
-                showResult(text, text)
-                maybeSpeak(text)
-                busy.set(false)
-            }
-    }
-
-    private fun maybeSpeak(text: String) {
-        if (!speak) return
-        if (text == lastSpoken) return
-        lastSpoken = text
-        val loc = Langs.all.find { it.mlkit == dstLang }?.locale ?: Locale.US
-        tts?.language = loc
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "t")
-    }
-
-    private fun createChannel() {
-        val ch = NotificationChannel("ot", getString(R.string.channel_name), NotificationManager.IMPORTANCE_LOW)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
-    }
-
-    private fun notif(msg: String): Notification {
-        return Notification.Builder(this, "ot")
-            .setContentTitle("Overlay Translator")
-            .setContentText(msg)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .build()
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Langs.all.find { it.mlkit == dstLang }?.locale ?: Locale.US
+            tts?.language = Locale("ru", "RU")
+            VoiceHelper.apply(tts, voiceKind, voiceName)
         }
     }
 
@@ -346,7 +285,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         vdisplay?.release()
         reader?.close()
         projection?.stop()
-        translator?.close()
+        vision?.close()
+        tess?.close()
         tts?.shutdown()
         super.onDestroy()
     }
