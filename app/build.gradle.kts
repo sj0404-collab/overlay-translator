@@ -41,5 +41,5 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
-    implementation("cz.adaptech.tesseract4android:tesseract4android:4.7.0")
+    implementation("com.github.adaptech-cz:Tesseract4Android:4.8.0")
 }
