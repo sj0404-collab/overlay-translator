@@ -150,24 +150,24 @@ object ImagePrep {
     }
 
     fun cleanOcr(raw: String, english: Boolean): String {
-        var s = raw.replace('\u000c', ' ').replace('\u00ad', "")
-        s = s.replace(Regex("[|¦]"), "I")
-        s = s.replace(Regex("[“”«»]"), "\"")
-        s = s.replace(Regex("[‘’`]"), "'")
-        s = s.replace(Regex("[—–−]"), "-")
+        var s = raw.replace('\u000c', ' ')
+        s = s.replace('|', 'I')
+        s = s.replace('\n', ' ')
+        s = s.replace('\r', ' ')
         s = s.replace(Regex("\\s+"), " ").trim()
-        // drop leftover UI junk
         s = s.replace(Regex("(?i)overlay\\s*tran.*"), "")
-        s = s.replace(Regex("(?i)локальн\\S*\\s+словар\\S*"), "")
         s = s.replace(Regex("(?i)mymemory"), "")
-        s = s.replace(Regex("(?i)только онлайн"), "")
         if (english) {
-            s = s.replace(Regex("[^A-Za-z0-9 .,!?;:'\"()\\-]"), " ")
-        } else {
-            s = s.replace(Regex("[A-Za-z]{8,}"), " ")
+            val sb = StringBuilder()
+            for (ch in s) {
+                val ok = ch.isLetterOrDigit() || ch == ' ' || ch == '.' || ch == ',' ||
+                    ch == '!' || ch == '?' || ch == ';' || ch == ':' || ch == '\'' ||
+                    ch == '"' || ch == '(' || ch == ')' || ch == '-'
+                sb.append(if (ok && ch.toInt() < 128) ch else ' ')
+            }
+            s = sb.toString()
         }
-        s = s.replace(Regex("\\s+"), " ").trim()
-        return s
+        return s.replace(Regex("\\s+"), " ").trim()
     }
 
     private fun luma(c: Int): Int {
