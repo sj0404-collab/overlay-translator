@@ -200,7 +200,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         tv.text = when (scanLang) {
             ScanLang.EN -> "EN"
             ScanLang.RU -> "RU"
-            ScanLang.BOTH -> "EN+RU"
+            ScanLang.BOTH -> "AUTO"
         }
     }
 
@@ -277,6 +277,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             resultView?.visibility = View.VISIBLE
             resultView?.findViewById<TextView>(R.id.srcText)?.text = src
             resultView?.findViewById<TextView>(R.id.dstText)?.text = dst
+            resultView?.findViewById<android.widget.Button>(R.id.btnCopy)?.setOnClickListener {
+                val clip = android.content.ClipData.newPlainText("tr", dst.ifBlank { src })
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+            }
+            resultView?.findViewById<android.widget.Button>(R.id.btnHide)?.setOnClickListener {
+                resultView?.visibility = View.INVISIBLE
+            }
         }
     }
 
@@ -329,8 +336,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         var text = tess?.read(prep).orEmpty()
         val crnn = vision?.crnnLine(prep).orEmpty()
         if (crnn.length > text.length + 2) text = crnn
-        val en = scanLang == ScanLang.EN
-        text = ImagePrep.cleanOcr(text, en)
+        val treatEn = when (scanLang) {
+            ScanLang.EN -> true
+            ScanLang.RU -> false
+            ScanLang.BOTH -> !ScriptDetect.preferRu(text)
+        }
+        text = ImagePrep.cleanOcr(text, treatEn)
         text = phrases?.correct(text) ?: text
         return text
     }
@@ -338,9 +349,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun applyTranslate(text: String) {
         Thread {
             val joined = text.replace('\n', ' ')
+            val skipTr = scanLang == ScanLang.RU || ScriptDetect.preferRu(joined)
             val known = phrases?.ruOf(joined)
             val out = when {
-                scanLang == ScanLang.RU -> text
+                skipTr -> text
                 known != null -> known
                 else -> translator?.translate(joined, trMode) ?: text
             }

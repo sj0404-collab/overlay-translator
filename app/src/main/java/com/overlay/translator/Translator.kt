@@ -1,6 +1,7 @@
 package com.overlay.translator
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -8,7 +9,7 @@ import java.net.URLEncoder
 import java.util.Locale
 
 class Translator(ctx: Context) {
-    enum class Mode { LOCAL_THEN_ONLINE, ONLINE, DICT }
+    enum class Mode { AUTO, LOCAL_THEN_ONLINE, ONLINE, DICT }
 
     private val dict = HashMap<String, String>()
 
@@ -24,28 +25,25 @@ class Translator(ctx: Context) {
     fun translate(text: String, mode: Mode): String {
         val cleaned = text.replace(Regex("\\s+"), " ").trim()
         if (cleaned.isEmpty()) return ""
+        if (ScriptDetect.isMostlyCyrillic(cleaned)) return cleaned
         val local = dictTranslate(cleaned)
+        val fullHit = dict[cleaned.lowercase(Locale.US)]
+        if (fullHit != null) return fullHit
         return when (mode) {
             Mode.DICT -> local
-            Mode.ONLINE -> online(cleaned) ?: local
-            Mode.LOCAL_THEN_ONLINE -> {
-                val unknown = cleaned.split(Regex("[^A-Za-z']+")).filter { it.length > 2 && !dict.containsKey(it.lowercase(Locale.US)) }
-                if (unknown.size <= cleaned.split(" ").size / 3 && local.isNotBlank()) local
-                else online(cleaned) ?: local
+            Mode.ONLINE -> google(cleaned) ?: mymemory(cleaned) ?: local
+            Mode.LOCAL_THEN_ONLINE, Mode.AUTO -> {
+                val unknown = cleaned.split(Regex("[^A-Za-z']+"))
+                    .filter { it.length > 2 && !dict.containsKey(it.lowercase(Locale.US)) }
+                if (unknown.isEmpty() && local.isNotBlank()) local
+                else google(cleaned) ?: mymemory(cleaned) ?: local
             }
         }
     }
 
     private fun dictTranslate(text: String): String {
-        // longest-phrase first
-        val lower = text.lowercase(Locale.US)
-        val keys = dict.keys.sortedByDescending { it.length }
-        var rest = lower
-        val out = StringBuilder()
-        var i = 0
         val words = text.split(Regex("\\s+"))
-        val used = BooleanArray(words.size)
-        // word-by-word with bigrams
+        val out = StringBuilder()
         var idx = 0
         while (idx < words.size) {
             val w = words[idx]
@@ -69,14 +67,35 @@ class Translator(ctx: Context) {
         return out.toString().trim()
     }
 
-    private fun online(text: String): String? {
+    /** Same idea as reference app: Google first, then fallbacks. No stolen API keys. */
+    private fun google(text: String): String? {
+        return try {
+            val q = URLEncoder.encode(text.take(800), "UTF-8")
+            val url = URL("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t&q=$q")
+            val c = url.openConnection() as HttpURLConnection
+            c.connectTimeout = 7000
+            c.readTimeout = 9000
+            c.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val body = c.inputStream.bufferedReader().readText()
+            c.disconnect()
+            val arr = JSONArray(body).getJSONArray(0)
+            val sb = StringBuilder()
+            for (i in 0 until arr.length()) {
+                sb.append(arr.getJSONArray(i).optString(0))
+            }
+            sb.toString().trim().ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun mymemory(text: String): String? {
         return try {
             val q = URLEncoder.encode(text.take(450), "UTF-8")
             val url = URL("https://api.mymemory.translated.net/get?q=$q&langpair=en|ru")
             val c = url.openConnection() as HttpURLConnection
             c.connectTimeout = 6000
             c.readTimeout = 8000
-            c.requestMethod = "GET"
             val body = c.inputStream.bufferedReader().readText()
             c.disconnect()
             val tr = JSONObject(body).getJSONObject("responseData").optString("translatedText")

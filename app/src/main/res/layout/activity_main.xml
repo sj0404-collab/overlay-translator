@@ -89,7 +89,7 @@
             android:textColor="#8BA4D9" />
 
         <RadioGroup android:id="@+id/trGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/trLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Локальный словарь + онлайн (MyMemory)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Авто: словарь → Google → MyMemory" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trOnline" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Только онлайн" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trDict" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Только локальный словарь (офлайн)" android:textColor="#E8EEF8" />
         </RadioGroup>
@@ -120,7 +120,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="ONNX vision + Tesseract eng/rus. Голоса зависят от Google TTS / RHVoice."
+            android:text="Схема как у экранных переводчиков: область → OCR (EN/RU/AUTO) → перевод → русский голос. Свои фичи: прозрачная область, скан отдельно от перевода, баблы, Live."
             android:textColor="#94A3B8" />
     </LinearLayout>
 </ScrollView>

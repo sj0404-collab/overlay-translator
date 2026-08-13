@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun trMode(): Translator.Mode = when {
         binding.trOnline.isChecked -> Translator.Mode.ONLINE
         binding.trDict.isChecked -> Translator.Mode.DICT
-        else -> Translator.Mode.LOCAL_THEN_ONLINE
+        else -> Translator.Mode.AUTO
     }
 
     private fun startOverlay() {
