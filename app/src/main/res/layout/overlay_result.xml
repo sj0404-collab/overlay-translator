@@ -1,25 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="280dp"
+    android:layout_width="300dp"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_result"
     android:orientation="vertical"
     android:padding="12dp">
 
     <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="OCR"
+        android:textColor="#64748B"
+        android:textSize="10sp" />
+
+    <TextView
         android:id="@+id/srcText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:maxLines="4"
-        android:textColor="#94A3B8"
-        android:textSize="12sp" />
+        android:fontFamily="sans-serif"
+        android:maxLines="6"
+        android:textColor="#CBD5E1"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Перевод"
+        android:textColor="#64748B"
+        android:textSize="10sp" />
 
     <TextView
         android:id="@+id/dstText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="…"
+        android:fontFamily="sans-serif-medium"
+        android:text="нажмите «Перевести» слева"
         android:textColor="#F8FAFC"
         android:textSize="15sp" />
 </LinearLayout>

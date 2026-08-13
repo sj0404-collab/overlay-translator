@@ -5,23 +5,24 @@
     android:background="@drawable/bg_bubble"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="8dp">
+    android:padding="6dp">
 
     <TextView
-        android:id="@+id/bubbleLabel"
+        android:id="@+id/btnLang"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="8dp"
-        android:text="OCR"
+        android:layout_height="36dp"
+        android:gravity="center"
+        android:paddingHorizontal="10dp"
+        android:text="EN"
         android:textColor="#FFFFFF"
         android:textStyle="bold" />
 
     <Button
         android:id="@+id/btnSelect"
         android:layout_width="wrap_content"
-        android:layout_height="40dp"
+        android:layout_height="36dp"
         android:minWidth="0dp"
-        android:paddingHorizontal="10dp"
+        android:paddingHorizontal="8dp"
         android:text="Область"
         android:textAllCaps="false"
         android:textSize="12sp" />
@@ -29,10 +30,20 @@
     <Button
         android:id="@+id/btnOnce"
         android:layout_width="wrap_content"
-        android:layout_height="40dp"
+        android:layout_height="36dp"
         android:minWidth="0dp"
-        android:paddingHorizontal="10dp"
+        android:paddingHorizontal="8dp"
         android:text="Скан"
         android:textAllCaps="false"
         android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/btnLive"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:minWidth="0dp"
+        android:paddingHorizontal="8dp"
+        android:text="Live:выкл"
+        android:textAllCaps="false"
+        android:textSize="11sp" />
 </LinearLayout>

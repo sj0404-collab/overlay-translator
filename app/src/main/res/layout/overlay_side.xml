@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="92dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_bubble"
+    android:orientation="vertical"
+    android:padding="6dp">
+
+    <Button
+        android:id="@+id/btnTranslate"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:backgroundTint="#22C55E"
+        android:text="Перевести"
+        android:textAllCaps="false"
+        android:textSize="11sp" />
+
+    <Button
+        android:id="@+id/btnBubbles"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="4dp"
+        android:text="Баблы"
+        android:textAllCaps="false"
+        android:textSize="11sp" />
+
+    <Button
+        android:id="@+id/btnSpeak"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="4dp"
+        android:text="Голос"
+        android:textAllCaps="false"
+        android:textSize="11sp" />
+</LinearLayout>

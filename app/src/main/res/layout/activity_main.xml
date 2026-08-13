@@ -98,8 +98,8 @@
             android:id="@+id/liveMode"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="Live OCR каждые ~1.3 с"
+            android:checked="false"
+            android:text="Live по умолчанию выкл (включается на панели оверлея)"
             android:textColor="#E8EEF8" />
 
         <CheckBox
