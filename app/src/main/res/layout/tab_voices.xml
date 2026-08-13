@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0B1220">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Русские голоса (системный TTS, не Azure)" android:textColor="#8BA4D9" android:textStyle="bold" />
+        <RadioGroup android:id="@+id/voiceGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <RadioButton android:id="@+id/vFemale" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Женский (Svetlana и др.)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/vMale" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Мужской (Dmitry и др.)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/vTeen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Подросток / детский" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/vOther" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Другие ru-голоса" android:textColor="#E8EEF8" />
+        </RadioGroup>
+        <Spinner android:id="@+id/voiceExact" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="#162033" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Поставьте Google TTS (русский) или RHVoice. Нейро-GGUF голоса в APK не влезают в 150 МБ." android:textColor="#94A3B8" />
+    </LinearLayout>
+</ScrollView>

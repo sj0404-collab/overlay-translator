@@ -1,126 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0B1220"
-    android:fillViewport="true">
+    android:orientation="vertical">
 
-    <LinearLayout
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="22dp">
+        android:padding="16dp"
+        android:text="Overlay Translator"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="EN → RU  ·  комиксы / манга"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#111827" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Два режима: английские комиксы/манга/манхва → русский перевод и озвучка; русские издания → только OCR + русские голоса."
-            android:textColor="#A8B3C7" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="Режим"
-            android:textColor="#8BA4D9" />
-
-        <RadioGroup
-            android:id="@+id/modeGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp">
-
-            <RadioButton
-                android:id="@+id/modeEn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="English → русский (комиксы, манга, манхва, маньхуа)"
-                android:textColor="#E8EEF8" />
-
-            <RadioButton
-                android:id="@+id/modeRu"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Русский текст (уже переведённые издания)"
-                android:textColor="#E8EEF8" />
-        </RadioGroup>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Русский голос"
-            android:textColor="#8BA4D9" />
-
-        <RadioGroup
-            android:id="@+id/voiceGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <RadioButton android:id="@+id/vFemale" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Женский" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/vMale" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Мужской" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/vTeen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Подросток / детский" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/vOther" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Другие системные ru-голоса" android:textColor="#E8EEF8" />
-        </RadioGroup>
-
-        <Spinner
-            android:id="@+id/voiceExact"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="6dp"
-            android:background="#162033"
-            android:padding="8dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="Перевод"
-            android:textColor="#8BA4D9" />
-
-        <RadioGroup android:id="@+id/trGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/trLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Авто: словарь → Google → MyMemory" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/trOnline" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Только онлайн" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/trDict" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Только локальный словарь (офлайн)" android:textColor="#E8EEF8" />
-        </RadioGroup>
-
-        <CheckBox
-            android:id="@+id/liveMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:checked="false"
-            android:text="Live по умолчанию выкл (включается на панели оверлея)"
-            android:textColor="#E8EEF8" />
-
-        <CheckBox
-            android:id="@+id/speakMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="Озвучивать по-русски"
-            android:textColor="#E8EEF8" />
-
-        <Button android:id="@+id/btnOverlay" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="10dp" android:backgroundTint="#5B8DEF" android:text="Разрешить оверлей" android:textAllCaps="false" />
-        <Button android:id="@+id/btnCapture" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="6dp" android:backgroundTint="#3D6BD4" android:text="Разрешить захват экрана" android:textAllCaps="false" />
-        <Button android:id="@+id/btnStart" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="12dp" android:backgroundTint="#22C55E" android:text="Запустить оверлей" android:textAllCaps="false" />
-        <Button android:id="@+id/btnStop" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="6dp" android:backgroundTint="#334155" android:text="Остановить" android:textAllCaps="false" />
-
-        <TextView
-            android:id="@+id/status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Схема как у экранных переводчиков: область → OCR (EN/RU/AUTO) → перевод → русский голос. Свои фичи: прозрачная область, скан отдельно от перевода, баблы, Live."
-            android:textColor="#94A3B8" />
-    </LinearLayout>
-</ScrollView>
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/pager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

@@ -10,8 +10,8 @@ android {
         applicationId = "com.overlay.translator"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "3.3.0"
+        versionCode = 7
+        versionName = "4.0.0"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }

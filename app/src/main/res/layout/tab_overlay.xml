@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B1220">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Плавающий оверлей: область → OCR → перевод → голос. Интерфейс вкладок как у экранных переводчиков, движки свои."
+            android:textColor="#A8B3C7" />
+
+        <CheckBox android:id="@+id/liveMode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live (только после выбора области)" android:textColor="#E8EEF8" />
+        <CheckBox android:id="@+id/speakMode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="Озвучивать по-русски" android:textColor="#E8EEF8" />
+
+        <Button android:id="@+id/btnOverlay" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="12dp" android:backgroundTint="#5B8DEF" android:text="Разрешить оверлей" android:textAllCaps="false" />
+        <Button android:id="@+id/btnCapture" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="6dp" android:backgroundTint="#3D6BD4" android:text="Разрешить захват экрана" android:textAllCaps="false" />
+        <Button android:id="@+id/btnStart" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="12dp" android:backgroundTint="#22C55E" android:text="Запустить оверлей" android:textAllCaps="false" />
+        <Button android:id="@+id/btnStop" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="6dp" android:backgroundTint="#334155" android:text="Остановить" android:textAllCaps="false" />
+
+        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Статус" android:textColor="#94A3B8" />
+    </LinearLayout>
+</ScrollView>

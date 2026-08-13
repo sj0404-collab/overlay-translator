@@ -9,15 +9,29 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayoutMediator
 import com.overlay.translator.databinding.ActivityMainBinding
+import com.overlay.translator.databinding.TabOcrBinding
+import com.overlay.translator.databinding.TabOverlayBinding
+import com.overlay.translator.databinding.TabTranslateBinding
+import com.overlay.translator.databinding.TabVoicesBinding
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var binding: ActivityMainBinding
+    private var overlayTab: TabOverlayBinding? = null
+    private var ocrTab: TabOcrBinding? = null
+    private var trTab: TabTranslateBinding? = null
+    private var voiceTab: TabVoicesBinding? = null
     private var tts: TextToSpeech? = null
     private var voiceNames = listOf<String>()
 
@@ -26,7 +40,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (res.resultCode == Activity.RESULT_OK && res.data != null) {
             OverlayService.projectionResultCode = res.resultCode
             OverlayService.projectionData = res.data
-            binding.status.text = "Захват экрана разрешён"
+            overlayTab?.status?.text = "Захват экрана разрешён"
         }
     }
 
@@ -36,55 +50,146 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setContentView(binding.root)
         tts = TextToSpeech(this, this)
         if (Build.VERSION.SDK_INT >= 33) notifyPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+        binding.pager.adapter = Tabs()
+        TabLayoutMediator(binding.tabs, binding.pager) { tab, pos ->
+            tab.text = listOf("Оверлей", "OCR", "Перевод", "Голоса")[pos]
+        }.attach()
+    }
 
-        binding.btnOverlay.setOnClickListener {
+    private inner class Tabs : RecyclerView.Adapter<VH>() {
+        override fun getItemCount() = 4
+        override fun getItemViewType(position: Int) = position
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val inf = LayoutInflater.from(parent.context)
+            val v = when (viewType) {
+                0 -> TabOverlayBinding.inflate(inf, parent, false).also { overlayTab = it; wireOverlay(it) }.root
+                1 -> TabOcrBinding.inflate(inf, parent, false).also { ocrTab = it; wireOcr(it) }.root
+                2 -> TabTranslateBinding.inflate(inf, parent, false).also { trTab = it; wireTr(it) }.root
+                else -> TabVoicesBinding.inflate(inf, parent, false).also { voiceTab = it; wireVoices(it) }.root
+            }
+            return VH(v)
+        }
+        override fun onBindViewHolder(holder: VH, position: Int) {}
+    }
+
+    class VH(v: View) : RecyclerView.ViewHolder(v)
+
+    private fun wireOverlay(b: TabOverlayBinding) {
+        b.liveMode.isChecked = EnginePrefs.live(this)
+        b.speakMode.isChecked = EnginePrefs.speak(this)
+        b.liveMode.setOnCheckedChangeListener { _, v -> EnginePrefs.setLive(this, v) }
+        b.speakMode.setOnCheckedChangeListener { _, v -> EnginePrefs.setSpeak(this, v) }
+        b.btnOverlay.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             } else Toast.makeText(this, "Оверлей уже есть", Toast.LENGTH_SHORT).show()
         }
-        binding.btnCapture.setOnClickListener {
+        b.btnCapture.setOnClickListener {
             val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             capture.launch(mpm.createScreenCaptureIntent())
         }
-        binding.btnStart.setOnClickListener { startOverlay() }
-        binding.btnStop.setOnClickListener {
+        b.btnStart.setOnClickListener { startOverlay() }
+        b.btnStop.setOnClickListener {
             startService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
         }
     }
 
-    private fun voiceKind(): VoiceKind = when {
-        binding.vMale.isChecked -> VoiceKind.MALE
-        binding.vTeen.isChecked -> VoiceKind.TEEN
-        binding.vOther.isChecked -> VoiceKind.OTHER
-        else -> VoiceKind.FEMALE
+    private fun wireOcr(b: TabOcrBinding) {
+        when (EnginePrefs.ocr(this)) {
+            "tess" -> b.ocrTess.isChecked = true
+            "onnx" -> b.ocrOnnx.isChecked = true
+            "easy" -> b.ocrEasy.isChecked = true
+            "vision" -> b.ocrVision.isChecked = true
+            else -> b.ocrManga.isChecked = true
+        }
+        when (EnginePrefs.scanLang(this)) {
+            "EN" -> b.langEn.isChecked = true
+            "RU" -> b.langRu.isChecked = true
+            else -> b.langAuto.isChecked = true
+        }
+        b.ocrGroup.setOnCheckedChangeListener { _, id ->
+            EnginePrefs.setOcr(this, when (id) {
+                b.ocrTess.id -> "tess"
+                b.ocrOnnx.id -> "onnx"
+                b.ocrEasy.id -> "easy"
+                b.ocrVision.id -> "vision"
+                else -> "manga"
+            })
+        }
+        b.langGroup.setOnCheckedChangeListener { _, id ->
+            EnginePrefs.setScanLang(this, when (id) {
+                b.langEn.id -> "EN"
+                b.langRu.id -> "RU"
+                else -> "AUTO"
+            })
+        }
     }
 
-    private fun trMode(): Translator.Mode = when {
-        binding.trOnline.isChecked -> Translator.Mode.ONLINE
-        binding.trDict.isChecked -> Translator.Mode.DICT
-        else -> Translator.Mode.AUTO
+    private fun wireTr(b: TabTranslateBinding) {
+        when (EnginePrefs.tr(this)) {
+            "dict" -> b.trDict.isChecked = true
+            "google" -> b.trGoogle.isChecked = true
+            "deepl" -> b.trDeepl.isChecked = true
+            "mymemory" -> b.trMem.isChecked = true
+            "zen" -> b.trZen.isChecked = true
+            "openrouter" -> b.trOr.isChecked = true
+            else -> b.trAuto.isChecked = true
+        }
+        b.trGroup.setOnCheckedChangeListener { _, id ->
+            EnginePrefs.setTr(this, when (id) {
+                b.trDict.id -> "dict"
+                b.trGoogle.id -> "google"
+                b.trDeepl.id -> "deepl"
+                b.trMem.id -> "mymemory"
+                b.trZen.id -> "zen"
+                b.trOr.id -> "openrouter"
+                else -> "auto"
+            })
+        }
+        b.zenModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.ZEN_FREE)
+        val zi = LlmClient.ZEN_FREE.indexOf(EnginePrefs.zenModel(this)).coerceAtLeast(0)
+        b.zenModel.setSelection(zi)
+        b.zenModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                EnginePrefs.setZenModel(this@MainActivity, LlmClient.ZEN_FREE[pos])
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        b.orKey.setText(EnginePrefs.openrouterKey(this))
+        b.orKey.setOnFocusChangeListener { _, has ->
+            if (!has) EnginePrefs.setOpenrouterKey(this, b.orKey.text.toString().trim())
+        }
+    }
+
+    private fun wireVoices(b: TabVoicesBinding) {
+        b.voiceGroup.setOnCheckedChangeListener { _, _ -> refreshVoices() }
+        refreshVoices()
+    }
+
+    private fun voiceKind(): VoiceKind {
+        val b = voiceTab ?: return VoiceKind.FEMALE
+        return when {
+            b.vMale.isChecked -> VoiceKind.MALE
+            b.vTeen.isChecked -> VoiceKind.TEEN
+            b.vOther.isChecked -> VoiceKind.OTHER
+            else -> VoiceKind.FEMALE
+        }
     }
 
     private fun startOverlay() {
+        trTab?.orKey?.let { EnginePrefs.setOpenrouterKey(this, it.text.toString().trim()) }
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Сначала оверлей", Toast.LENGTH_LONG).show()
-            return
+            Toast.makeText(this, "Сначала оверлей", Toast.LENGTH_LONG).show(); return
         }
         if (OverlayService.projectionData == null) {
-            Toast.makeText(this, "Сначала захват экрана", Toast.LENGTH_LONG).show()
-            return
+            Toast.makeText(this, "Сначала захват экрана", Toast.LENGTH_LONG).show(); return
         }
-        val exact = voiceNames.getOrNull(binding.voiceExact.selectedItemPosition)
-        val i = Intent(this, OverlayService::class.java).apply {
+        val exact = voiceNames.getOrNull(voiceTab?.voiceExact?.selectedItemPosition ?: 0)
+        startForegroundService(Intent(this, OverlayService::class.java).apply {
             action = OverlayService.ACTION_START
-            putExtra(OverlayService.EXTRA_EN, binding.modeEn.isChecked)
-            putExtra(OverlayService.EXTRA_LIVE, binding.liveMode.isChecked)
-            putExtra(OverlayService.EXTRA_SPEAK, binding.speakMode.isChecked)
             putExtra(OverlayService.EXTRA_VOICE, voiceKind().name)
             putExtra(OverlayService.EXTRA_VOICE_NAME, exact)
-            putExtra(OverlayService.EXTRA_TR, trMode().name)
-        }
-        startForegroundService(i)
+        })
         moveTaskToBack(true)
     }
 
@@ -92,31 +197,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (status != TextToSpeech.SUCCESS) return
         tts?.language = Locale("ru", "RU")
         refreshVoices()
-        binding.voiceGroup.setOnCheckedChangeListener { _, _ -> refreshVoices() }
     }
 
     private fun refreshVoices() {
+        val b = voiceTab ?: return
         val ru = VoiceHelper.russianVoices(tts)
         val kind = voiceKind()
         val filtered = ru.filter { VoiceHelper.classify(it) == kind }.ifEmpty { ru }
         voiceNames = filtered.map { it.name }
-        val labels = filtered.map {
-            val g = when (VoiceHelper.classify(it)) {
-                VoiceKind.MALE -> "♂ "
-                VoiceKind.FEMALE -> "♀ "
-                VoiceKind.TEEN -> "🧒 "
-                else -> "• "
-            }
-            g + it.name.substringAfterLast(":")
-        }
-        binding.voiceExact.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            labels.ifEmpty { listOf("Системный ru (установите Google TTS / RHVoice)") }
+        val labels = filtered.map { it.name.substringAfterLast(":") }
+        b.voiceExact.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            labels.ifEmpty { listOf("Установите Google TTS / RHVoice") }
         )
-        binding.status.text = if (ru.isEmpty())
-            "Русских голосов нет. Установите Google TTS (русский) или RHVoice."
-        else "Найдено русских голосов: ${ru.size}"
     }
 
     override fun onDestroy() {

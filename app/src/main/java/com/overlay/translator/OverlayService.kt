@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -31,17 +33,12 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 class OverlayService : Service(), TextToSpeech.OnInitListener {
-
     companion object {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
         const val ACTION_REBIND = "rebind"
-        const val EXTRA_EN = "en"
-        const val EXTRA_LIVE = "live"
-        const val EXTRA_SPEAK = "speak"
         const val EXTRA_VOICE = "voice"
         const val EXTRA_VOICE_NAME = "voice_name"
-        const val EXTRA_TR = "tr"
         var projectionResultCode: Int = 0
         var projectionData: Intent? = null
     }
@@ -52,16 +49,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var resultView: View? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
-    private var vision: OnnxVision? = null
-    private var tess: TessOcr? = null
+    private var ocr: OcrRouter? = null
     private var translator: Translator? = null
     private var phrases: PhraseBank? = null
-    private var scanLang = ScanLang.EN
     private var live = false
     private var speak = true
     private var voiceKind = VoiceKind.FEMALE
     private var voiceName: String? = null
-    private var trMode = Translator.Mode.LOCAL_THEN_ONLINE
     private var region: RectF? = null
     private var lastOcr = ""
     private var lastTr = ""
@@ -77,7 +71,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (live && region != null) captureThen(ocrOnly = true, findBubbles = true)
+            if (live && region != null) captureThen(ocrOnly = true)
             handler.postDelayed(this, 2800)
         }
     }
@@ -89,23 +83,17 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel("ot", "Overlay", NotificationManager.IMPORTANCE_LOW))
-        startForeground(
-            1,
-            Notification.Builder(this, "ot")
-                .setContentTitle("Overlay Translator")
-                .setContentText("Выберите область, затем Скан")
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                .build()
-        )
+        startForeground(1, Notification.Builder(this, "ot")
+            .setContentTitle("Overlay Translator")
+            .setContentText("Область → Скан → Перевести")
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .build())
         tts = TextToSpeech(this, this)
         val dm = DisplayMetrics()
         wm.defaultDisplay.getRealMetrics(dm)
-        screenW = dm.widthPixels
-        screenH = dm.heightPixels
-        density = dm.densityDpi
+        screenW = dm.widthPixels; screenH = dm.heightPixels; density = dm.densityDpi
         Thread {
-            vision = OnnxVision(this)
-            tess = TessOcr(this)
+            ocr = OcrRouter(this)
             translator = Translator(this)
             phrases = PhraseBank(this)
         }.start()
@@ -115,16 +103,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
-                scanLang = if (intent.getBooleanExtra(EXTRA_EN, true)) ScanLang.EN else ScanLang.RU
                 live = false
-                speak = intent.getBooleanExtra(EXTRA_SPEAK, true)
+                speak = EnginePrefs.speak(this)
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
                 voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
-                trMode = runCatching {
-                    Translator.Mode.valueOf(intent.getStringExtra(EXTRA_TR) ?: "LOCAL_THEN_ONLINE")
-                }.getOrDefault(Translator.Mode.LOCAL_THEN_ONLINE)
-                tess?.reopen(scanLang)
+                ocr?.setLang(scanLang())
                 VoiceHelper.apply(tts, voiceKind, voiceName)
                 bindProjection()
                 showChrome()
@@ -134,6 +118,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             ACTION_REBIND -> bindProjection()
         }
         return START_STICKY
+    }
+
+    private fun scanLang() = when (EnginePrefs.scanLang(this)) {
+        "EN" -> ScanLang.EN
+        "RU" -> ScanLang.RU
+        else -> ScanLang.BOTH
     }
 
     private fun bindProjection() {
@@ -158,20 +148,18 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         if (bubble == null) {
             val bind = OverlayBubbleBinding.inflate(LayoutInflater.from(this))
             bubble = bind.root
-            updateLangLabel(bind.btnLang)
+            updateLang(bind.btnLang)
             bind.btnLang.setOnClickListener {
-                scanLang = when (scanLang) {
-                    ScanLang.EN -> ScanLang.RU
-                    ScanLang.RU -> ScanLang.BOTH
-                    ScanLang.BOTH -> ScanLang.EN
+                val next = when (EnginePrefs.scanLang(this)) {
+                    "EN" -> "RU"; "RU" -> "AUTO"; else -> "EN"
                 }
-                tess?.reopen(scanLang)
-                updateLangLabel(bind.btnLang)
+                EnginePrefs.setScanLang(this, next)
+                ocr?.setLang(scanLang())
+                updateLang(bind.btnLang)
             }
             bind.btnSelect.setOnClickListener { startRegionPick() }
             bind.btnOnce.setOnClickListener {
-                if (region == null) startRegionPick()
-                else captureThen(ocrOnly = true, findBubbles = false)
+                if (region == null) startRegionPick() else captureThen(true)
             }
             bind.btnLive.setOnClickListener {
                 live = !live
@@ -182,38 +170,28 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         if (side == null) {
             side = LayoutInflater.from(this).inflate(R.layout.overlay_side, null)
             side!!.findViewById<Button>(R.id.btnTranslate).setOnClickListener {
-                if (lastOcr.isBlank()) captureThen(ocrOnly = false, findBubbles = true)
-                else applyTranslate(lastOcr)
+                if (lastOcr.isBlank()) captureThen(false) else applyTranslate(lastOcr)
             }
-            side!!.findViewById<Button>(R.id.btnBubbles).setOnClickListener {
-                captureThen(ocrOnly = true, findBubbles = true)
-            }
+            side!!.findViewById<Button>(R.id.btnBubbles).setOnClickListener { captureThen(true) }
             side!!.findViewById<Button>(R.id.btnSpeak).setOnClickListener {
                 val t = lastTr.ifBlank { lastOcr }
-                if (t.isNotBlank()) speakNow(t, force = true)
+                if (t.isNotBlank()) speakNow(t, true)
             }
             addDraggable(side!!, Gravity.TOP or Gravity.START, 8, 420)
         }
     }
 
-    private fun updateLangLabel(tv: TextView) {
-        tv.text = when (scanLang) {
-            ScanLang.EN -> "EN"
-            ScanLang.RU -> "RU"
-            ScanLang.BOTH -> "AUTO"
-        }
+    private fun updateLang(tv: TextView) {
+        tv.text = EnginePrefs.scanLang(this)
     }
 
     private fun addDraggable(v: View, gravity: Int, x: Int, y: Int) {
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
         )
-        lp.gravity = gravity
-        lp.x = x; lp.y = y
+        lp.gravity = gravity; lp.x = x; lp.y = y
         var px = 0; var py = 0
         v.setOnTouchListener { _, e ->
             when (e.action) {
@@ -236,8 +214,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         val rv = RegionView(this)
         regionView = rv
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
@@ -247,16 +224,14 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             try { wm.removeView(rv) } catch (_: Exception) {}
             regionView = null
             setChrome(true)
-            showResult("область выбрана — нажмите Скан", "перевод по кнопке слева")
+            showResult("область выбрана — Скан", "затем Перевести слева")
         }
         wm.addView(rv, lp)
     }
 
     private fun setChrome(show: Boolean) {
         val vis = if (show) View.VISIBLE else View.INVISIBLE
-        bubble?.visibility = vis
-        side?.visibility = vis
-        resultView?.visibility = vis
+        bubble?.visibility = vis; side?.visibility = vis; resultView?.visibility = vis
     }
 
     private fun showResult(src: String, dst: String) {
@@ -264,11 +239,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             if (resultView == null) {
                 resultView = LayoutInflater.from(this).inflate(R.layout.overlay_result, null)
                 val lp = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                    PixelFormat.TRANSLUCENT
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
                 )
                 lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 lp.y = 100
@@ -277,17 +250,17 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             resultView?.visibility = View.VISIBLE
             resultView?.findViewById<TextView>(R.id.srcText)?.text = src
             resultView?.findViewById<TextView>(R.id.dstText)?.text = dst
-            resultView?.findViewById<android.widget.Button>(R.id.btnCopy)?.setOnClickListener {
-                val clip = android.content.ClipData.newPlainText("tr", dst.ifBlank { src })
-                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+            resultView?.findViewById<Button>(R.id.btnCopy)?.setOnClickListener {
+                val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("tr", dst.ifBlank { src }))
             }
-            resultView?.findViewById<android.widget.Button>(R.id.btnHide)?.setOnClickListener {
+            resultView?.findViewById<Button>(R.id.btnHide)?.setOnClickListener {
                 resultView?.visibility = View.INVISIBLE
             }
         }
     }
 
-    private fun captureThen(ocrOnly: Boolean, findBubbles: Boolean) {
+    private fun captureThen(ocrOnly: Boolean) {
         val r = region ?: return
         if (!busy.compareAndSet(false, true)) return
         setChrome(false)
@@ -295,32 +268,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             Thread {
                 try {
                     val piece = grab(r) ?: return@Thread
-                    val parts = ArrayList<String>()
-                    if (findBubbles) {
-                        val bubbles = ImagePrep.findBubbles(piece)
-                        if (bubbles.isNotEmpty()) {
-                            for (b in bubbles) {
-                                val crop = Bitmap.createBitmap(
-                                    piece, b.rect.left, b.rect.top, b.rect.width(), b.rect.height()
-                                )
-                                val t = ocrBitmap(crop)
-                                if (t.isNotBlank()) parts.add(t)
-                            }
-                        }
-                    }
-                    if (parts.isEmpty()) {
-                        val t = ocrBitmap(piece)
-                        if (t.isNotBlank()) parts.add(t)
-                    }
-                    val text = parts.joinToString("\n").trim()
+                    val text = ocr?.read(piece, EnginePrefs.ocr(this), scanLang()).orEmpty().trim()
                     if (text.isBlank()) {
-                        showResult("(пусто — смените EN/RU или область)", "")
-                        return@Thread
+                        showResult("(пусто — смените OCR/алфавит)", ""); return@Thread
                     }
                     if (text == lastOcr && ocrOnly) return@Thread
-                    lastOcr = text
-                    lastTr = ""
-                    showResult(text, if (ocrOnly) "нажмите «Перевести» слева" else "")
+                    lastOcr = text; lastTr = ""
+                    showResult(text, if (ocrOnly) "нажмите «Перевести»" else "")
                     if (!ocrOnly) applyTranslate(text)
                 } catch (_: Exception) {
                 } finally {
@@ -331,34 +285,19 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }, 90)
     }
 
-    private fun ocrBitmap(src: Bitmap): String {
-        val prep = ImagePrep.prepareForOcr(src)
-        var text = tess?.read(prep).orEmpty()
-        val crnn = vision?.crnnLine(prep).orEmpty()
-        if (crnn.length > text.length + 2) text = crnn
-        val treatEn = when (scanLang) {
-            ScanLang.EN -> true
-            ScanLang.RU -> false
-            ScanLang.BOTH -> !ScriptDetect.preferRu(text)
-        }
-        text = ImagePrep.cleanOcr(text, treatEn)
-        text = phrases?.correct(text) ?: text
-        return text
-    }
-
     private fun applyTranslate(text: String) {
         Thread {
             val joined = text.replace('\n', ' ')
-            val skipTr = scanLang == ScanLang.RU || ScriptDetect.preferRu(joined)
+            val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
             val known = phrases?.ruOf(joined)
             val out = when {
-                skipTr -> text
+                skip -> text
                 known != null -> known
-                else -> translator?.translate(joined, trMode) ?: text
+                else -> translator?.translate(joined, EnginePrefs.tr(this)) ?: text
             }
             lastTr = out
             showResult(text, out)
-            if (speak) speakNow(out, force = false)
+            if (speak) speakNow(out, false)
         }.start()
     }
 
@@ -389,9 +328,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             )
             if (crop.width() < 8 || crop.height() < 8) null
             else Bitmap.createBitmap(bmp, crop.left, crop.top, crop.width(), crop.height())
-        } finally {
-            img.close()
-        }
+        } finally { img.close() }
     }
 
     override fun onInit(status: Int) {
@@ -407,12 +344,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         try { side?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { resultView?.let { wm.removeView(it) } } catch (_: Exception) {}
         try { regionView?.let { wm.removeView(it) } } catch (_: Exception) {}
-        vdisplay?.release()
-        reader?.close()
-        projection?.stop()
-        vision?.close()
-        tess?.close()
-        tts?.shutdown()
+        vdisplay?.release(); reader?.close(); projection?.stop()
+        ocr?.close(); tts?.shutdown()
         super.onDestroy()
     }
 }
