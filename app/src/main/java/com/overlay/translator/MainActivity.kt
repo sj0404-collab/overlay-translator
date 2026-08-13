@@ -95,7 +95,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireOcr(b: TabOcrBinding) {
-        if (EnginePrefs.ocr(this) == "openrouter") b.ocrOr.isChecked = true else b.ocrZen.isChecked = true
+        when (EnginePrefs.ocr(this)) {
+            "openrouter" -> b.ocrOr.isChecked = true
+            "yolo" -> b.ocrYolo.isChecked = true
+            "mlkit" -> b.ocrMlkit.isChecked = true
+            "tess" -> b.ocrTess.isChecked = true
+            "local" -> b.ocrLocal.isChecked = true
+            else -> b.ocrZen.isChecked = true
+        }
         when (EnginePrefs.scanLang(this)) {
             "EN" -> b.langEn.isChecked = true
             "AUTO" -> b.langAuto.isChecked = true
@@ -112,7 +119,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             else -> b.regRect.isChecked = true
         }
         b.ocrGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setOcr(this, if (id == b.ocrOr.id) "openrouter" else "zen")
+            EnginePrefs.setOcr(this, when (id) {
+                b.ocrOr.id -> "openrouter"
+                b.ocrYolo.id -> "yolo"
+                b.ocrMlkit.id -> "mlkit"
+                b.ocrTess.id -> "tess"
+                b.ocrLocal.id -> "local"
+                else -> "zen"
+            })
         }
         b.langGroup.setOnCheckedChangeListener { _, id ->
             EnginePrefs.setScanLang(this, when (id) {
@@ -141,6 +155,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         when (EnginePrefs.tr(this)) {
             "google" -> b.trGoogle.isChecked = true
             "openrouter" -> b.trOr.isChecked = true
+            "local" -> b.trLocal.isChecked = true
             "auto" -> b.trAuto.isChecked = true
             else -> b.trZen.isChecked = true
         }

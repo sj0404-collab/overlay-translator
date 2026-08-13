@@ -7,7 +7,8 @@
             <RadioButton android:id="@+id/trZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="OpenCode Zen (без ключа)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter :free" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trGoogle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google (без ключа)" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/trAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Авто: Zen → Google" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Local NMT (ML Kit, офлайн модель)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Авто: Local NMT → Zen → Google" android:textColor="#E8EEF8" />
         </RadioGroup>
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Модель Zen Vision / перевод" android:textColor="#8BA4D9" />
         <Spinner android:id="@+id/zenModel" android:layout_width="match_parent" android:layout_height="48dp" android:background="#162033" />

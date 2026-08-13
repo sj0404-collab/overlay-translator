@@ -32,7 +32,8 @@ class Translator(private val ctx: Context) {
             "google" -> google(cleaned) ?: dictTranslate(cleaned)
             "mymemory" -> mymemory(cleaned) ?: dictTranslate(cleaned)
             "deepl" -> deepl(cleaned) ?: google(cleaned) ?: dictTranslate(cleaned)
-            "zen" -> LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx)) ?: google(cleaned) ?: dictTranslate(cleaned)
+            "local" -> LocalNmt.translate(cleaned) ?: dictTranslate(cleaned)
+            "zen" -> LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx)) ?: LocalNmt.translate(cleaned) ?: google(cleaned) ?: dictTranslate(cleaned)
             "openrouter" -> LlmClient.translateOpenRouter(cleaned, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx))
                 ?: LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
                 ?: google(cleaned)
@@ -42,9 +43,9 @@ class Translator(private val ctx: Context) {
                 val unknown = cleaned.split(Regex("[^A-Za-z']+"))
                     .filter { it.length > 2 && !dict.containsKey(it.lowercase(Locale.US)) }
                 if (unknown.isEmpty() && local.isNotBlank()) local
-                else google(cleaned)
+                else LocalNmt.translate(cleaned)
                     ?: LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
-                    ?: mymemory(cleaned)
+                    ?: google(cleaned)
                     ?: local
             }
         }
