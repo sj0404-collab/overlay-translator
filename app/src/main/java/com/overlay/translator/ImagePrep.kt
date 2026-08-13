@@ -131,15 +131,22 @@ object ImagePrep {
                 out.add(Bubble(r, light * 2 >= cnt))
             }
         }
-        // keep largest unique
-        out.sortByDescending { it.rect.width() * it.rect.height() }
+        out.sortByDescending { b -> b.rect.width() * b.rect.height() }
         val kept = ArrayList<Bubble>()
         for (b in out) {
-            if (kept.any { iou(it.rect, b.rect) > 0.55f }) continue
+            var overlap = false
+            for (k in kept) {
+                if (iou(k.rect, b.rect) > 0.55f) {
+                    overlap = true
+                    break
+                }
+            }
+            if (overlap) continue
             kept.add(b)
             if (kept.size >= 8) break
         }
-        return kept.sortedBy { it.rect.top * 10000 + it.rect.left }
+        kept.sortWith(compareBy({ b: Bubble -> b.rect.top }, { b: Bubble -> b.rect.left }))
+        return kept
     }
 
     fun cleanOcr(raw: String, english: Boolean): String {
