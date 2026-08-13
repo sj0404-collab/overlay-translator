@@ -1,5 +1,7 @@
 package com.overlay.translator
 
+enum class ScanLang { EN, RU, BOTH }
+
 object ScriptDetect {
     fun isMostlyCyrillic(text: String): Boolean {
         var cyr = 0

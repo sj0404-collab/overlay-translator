@@ -26,14 +26,14 @@ class Translator(private val ctx: Context) {
         val cleaned = text.replace(Regex("\\s+"), " ").trim()
         if (cleaned.isEmpty()) return ""
         if (ScriptDetect.isMostlyCyrillic(cleaned)) return cleaned
-        dict[cleaned.lowercase(Locale.US)]?.let { return it }
-        return when (engine) {
+        dict[cleaned.lowercase(Locale.US)]?.let { return RuText.clean(it) }
+        val raw = when (engine) {
             "dict" -> dictTranslate(cleaned)
             "google" -> google(cleaned) ?: dictTranslate(cleaned)
             "mymemory" -> mymemory(cleaned) ?: dictTranslate(cleaned)
             "deepl" -> deepl(cleaned) ?: google(cleaned) ?: dictTranslate(cleaned)
             "zen" -> LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx)) ?: google(cleaned) ?: dictTranslate(cleaned)
-            "openrouter" -> LlmClient.translateOpenRouter(cleaned, EnginePrefs.openrouterKey(ctx))
+            "openrouter" -> LlmClient.translateOpenRouter(cleaned, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx))
                 ?: LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
                 ?: google(cleaned)
                 ?: dictTranslate(cleaned)
@@ -48,6 +48,7 @@ class Translator(private val ctx: Context) {
                     ?: local
             }
         }
+        return RuText.clean(raw)
     }
 
     private fun dictTranslate(text: String): String {

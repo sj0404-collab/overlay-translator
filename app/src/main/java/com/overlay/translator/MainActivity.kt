@@ -95,63 +95,76 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireOcr(b: TabOcrBinding) {
-        when (EnginePrefs.ocr(this)) {
-            "tess" -> b.ocrTess.isChecked = true
-            "onnx" -> b.ocrOnnx.isChecked = true
-            "easy" -> b.ocrEasy.isChecked = true
-            "vision" -> b.ocrVision.isChecked = true
-            else -> b.ocrManga.isChecked = true
-        }
+        if (EnginePrefs.ocr(this) == "openrouter") b.ocrOr.isChecked = true else b.ocrZen.isChecked = true
         when (EnginePrefs.scanLang(this)) {
             "EN" -> b.langEn.isChecked = true
-            "RU" -> b.langRu.isChecked = true
-            else -> b.langAuto.isChecked = true
+            "AUTO" -> b.langAuto.isChecked = true
+            else -> b.langRu.isChecked = true
+        }
+        when (EnginePrefs.scanMode(this)) {
+            "bubble" -> b.scanBubble.isChecked = true
+            "full" -> b.scanFull.isChecked = true
+            else -> b.scanRect.isChecked = true
+        }
+        when (EnginePrefs.regionMode(this)) {
+            "wide" -> b.regWide.isChecked = true
+            "screen" -> b.regScreen.isChecked = true
+            else -> b.regRect.isChecked = true
         }
         b.ocrGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setOcr(this, when (id) {
-                b.ocrTess.id -> "tess"
-                b.ocrOnnx.id -> "onnx"
-                b.ocrEasy.id -> "easy"
-                b.ocrVision.id -> "vision"
-                else -> "manga"
-            })
+            EnginePrefs.setOcr(this, if (id == b.ocrOr.id) "openrouter" else "zen")
         }
         b.langGroup.setOnCheckedChangeListener { _, id ->
             EnginePrefs.setScanLang(this, when (id) {
                 b.langEn.id -> "EN"
-                b.langRu.id -> "RU"
-                else -> "AUTO"
+                b.langAuto.id -> "AUTO"
+                else -> "RU"
+            })
+        }
+        b.scanModeGroup.setOnCheckedChangeListener { _, id ->
+            EnginePrefs.setScanMode(this, when (id) {
+                b.scanBubble.id -> "bubble"
+                b.scanFull.id -> "full"
+                else -> "rect"
+            })
+        }
+        b.regionModeGroup.setOnCheckedChangeListener { _, id ->
+            EnginePrefs.setRegionMode(this, when (id) {
+                b.regWide.id -> "wide"
+                b.regScreen.id -> "screen"
+                else -> "rect"
             })
         }
     }
 
     private fun wireTr(b: TabTranslateBinding) {
         when (EnginePrefs.tr(this)) {
-            "dict" -> b.trDict.isChecked = true
             "google" -> b.trGoogle.isChecked = true
-            "deepl" -> b.trDeepl.isChecked = true
-            "mymemory" -> b.trMem.isChecked = true
-            "zen" -> b.trZen.isChecked = true
             "openrouter" -> b.trOr.isChecked = true
-            else -> b.trAuto.isChecked = true
+            "auto" -> b.trAuto.isChecked = true
+            else -> b.trZen.isChecked = true
         }
         b.trGroup.setOnCheckedChangeListener { _, id ->
             EnginePrefs.setTr(this, when (id) {
-                b.trDict.id -> "dict"
                 b.trGoogle.id -> "google"
-                b.trDeepl.id -> "deepl"
-                b.trMem.id -> "mymemory"
-                b.trZen.id -> "zen"
                 b.trOr.id -> "openrouter"
-                else -> "auto"
+                b.trAuto.id -> "auto"
+                else -> "zen"
             })
         }
         b.zenModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.ZEN_FREE)
-        val zi = LlmClient.ZEN_FREE.indexOf(EnginePrefs.zenModel(this)).coerceAtLeast(0)
-        b.zenModel.setSelection(zi)
+        b.zenModel.setSelection(LlmClient.ZEN_FREE.indexOf(EnginePrefs.zenModel(this)).coerceAtLeast(0))
         b.zenModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
                 EnginePrefs.setZenModel(this@MainActivity, LlmClient.ZEN_FREE[pos])
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        b.orModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.OR_FREE)
+        b.orModel.setSelection(LlmClient.OR_FREE.indexOf(EnginePrefs.orModel(this)).coerceAtLeast(0))
+        b.orModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                EnginePrefs.setOrModel(this@MainActivity, LlmClient.OR_FREE[pos])
             }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }

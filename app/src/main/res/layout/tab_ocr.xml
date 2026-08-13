@@ -2,19 +2,28 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0B1220">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Движок OCR (vision)" android:textColor="#8BA4D9" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Сканирование (vision)" android:textColor="#8BA4D9" android:textStyle="bold" />
         <RadioGroup android:id="@+id/ocrGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/ocrManga" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Manga OCR — баблы + ONNX + Tesseract" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/ocrTess" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tesseract eng/rus" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/ocrOnnx" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ONNX CRNN (модель в APK)" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/ocrEasy" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Easy-style (2 прохода фона)" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/ocrVision" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Vision LLM Zen (без ключа)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Zen Vision (без ключа) — основной" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter Vision (:free, нужен ключ)" android:textColor="#E8EEF8" />
         </RadioGroup>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Алфавит скана" android:textColor="#8BA4D9" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Вид скана" android:textColor="#8BA4D9" />
+        <RadioGroup android:id="@+id/scanModeGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <RadioButton android:id="@+id/scanRect" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Прямоугольник — весь кроп" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/scanBubble" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Бабл — только облачко внутри кропа" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/scanFull" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Страница — весь выбранный кадр" android:textColor="#E8EEF8" />
+        </RadioGroup>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Вид области" android:textColor="#8BA4D9" />
+        <RadioGroup android:id="@+id/regionModeGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <RadioButton android:id="@+id/regRect" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Прямоугольник" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/regWide" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Широкая полоса (диалоги)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/regScreen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Почти весь экран" android:textColor="#E8EEF8" />
+        </RadioGroup>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Алфавит" android:textColor="#8BA4D9" />
         <RadioGroup android:id="@+id/langGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/langAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="AUTO" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/langEn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="English" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/langRu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Русский" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/langRu" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Только русский (кириллица, без латиницы)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/langEn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="English → потом перевод" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/langAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="AUTO" android:textColor="#E8EEF8" />
         </RadioGroup>
     </LinearLayout>
 </ScrollView>

@@ -1,67 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="300dp"
-    android:layout_height="wrap_content"
-    android:background="@drawable/bg_result"
-    android:orientation="vertical"
-    android:padding="12dp">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="OCR"
-        android:textColor="#64748B"
-        android:textSize="10sp" />
-
-    <TextView
-        android:id="@+id/srcText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans-serif"
-        android:maxLines="6"
-        android:textColor="#CBD5E1"
-        android:textSize="13sp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Перевод"
-        android:textColor="#64748B"
-        android:textSize="10sp" />
-
-    <TextView
-        android:id="@+id/dstText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans-serif-medium"
-        android:text="нажмите «Перевести» слева"
-        android:textColor="#F8FAFC"
-        android:textSize="15sp" />
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E60B1220">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <Button
-            android:id="@+id/btnCopy"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="Копировать"
-            android:textAllCaps="false"
-            android:textSize="11sp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Распознано / перевод"
+            android:textColor="#94A3B8"
+            android:textSize="12sp" />
 
-        <Button
-            android:id="@+id/btnHide"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_marginStart="6dp"
+        <ScrollView
+            android:id="@+id/resultScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:text="Скрыть"
-            android:textAllCaps="false"
-            android:textSize="11sp" />
+            android:layout_marginTop="8dp"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/srcText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
+                    android:lineSpacingExtra="4dp"
+                    android:textColor="#CBD5E1"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/dstText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:lineSpacingExtra="6dp"
+                    android:textColor="#F8FAFC"
+                    android:textSize="20sp" />
+            </LinearLayout>
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button android:id="@+id/btnCopy" android:layout_width="0dp" android:layout_height="44dp" android:layout_weight="1" android:text="Копировать" android:textAllCaps="false" android:textSize="12sp" />
+            <Button android:id="@+id/btnDown" android:layout_width="0dp" android:layout_height="44dp" android:layout_marginStart="6dp" android:layout_weight="1" android:text="Вниз" android:textAllCaps="false" android:textSize="12sp" />
+            <Button android:id="@+id/btnHide" android:layout_width="0dp" android:layout_height="44dp" android:layout_marginStart="6dp" android:layout_weight="1" android:text="Скрыть" android:textAllCaps="false" android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

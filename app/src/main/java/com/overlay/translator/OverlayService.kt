@@ -27,10 +27,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.ScrollView
 import android.widget.TextView
 import com.overlay.translator.databinding.OverlayBubbleBinding
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 
 class OverlayService : Service(), TextToSpeech.OnInitListener {
     companion object {
@@ -47,6 +49,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var bubble: View? = null
     private var side: View? = null
     private var resultView: View? = null
+    private var fab: TextView? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
     private var ocr: OcrRouter? = null
@@ -59,6 +62,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var region: RectF? = null
     private var lastOcr = ""
     private var lastTr = ""
+    private var lastHash = 0
     private val handler = Handler(Looper.getMainLooper())
     private val busy = AtomicBoolean(false)
     private var lastSpoken = ""
@@ -71,8 +75,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (live && region != null) captureThen(ocrOnly = true)
-            handler.postDelayed(this, 2800)
+            if (live && region != null && !busy.get()) captureThen(ocrOnly = true, livePass = true)
+            handler.postDelayed(this, 5200)
         }
     }
 
@@ -85,7 +89,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             .createNotificationChannel(NotificationChannel("ot", "Overlay", NotificationManager.IMPORTANCE_LOW))
         startForeground(1, Notification.Builder(this, "ot")
             .setContentTitle("Overlay Translator")
-            .setContentText("Область → Скан → Перевести")
+            .setContentText("Zen Vision")
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .build())
         tts = TextToSpeech(this, this)
@@ -108,7 +112,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
                 voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
-                ocr?.setLang(scanLang())
                 VoiceHelper.apply(tts, voiceKind, voiceName)
                 bindProjection()
                 showChrome()
@@ -122,8 +125,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private fun scanLang() = when (EnginePrefs.scanLang(this)) {
         "EN" -> ScanLang.EN
-        "RU" -> ScanLang.RU
-        else -> ScanLang.BOTH
+        "AUTO" -> ScanLang.BOTH
+        else -> ScanLang.RU
     }
 
     private fun bindProjection() {
@@ -151,55 +154,70 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             updateLang(bind.btnLang)
             bind.btnLang.setOnClickListener {
                 val next = when (EnginePrefs.scanLang(this)) {
-                    "EN" -> "RU"; "RU" -> "AUTO"; else -> "EN"
+                    "RU" -> "EN"; "EN" -> "AUTO"; else -> "RU"
                 }
                 EnginePrefs.setScanLang(this, next)
-                ocr?.setLang(scanLang())
                 updateLang(bind.btnLang)
             }
             bind.btnSelect.setOnClickListener { startRegionPick() }
             bind.btnOnce.setOnClickListener {
-                if (region == null) startRegionPick() else captureThen(true)
+                if (region == null) startRegionPick() else captureThen(true, false)
             }
             bind.btnLive.setOnClickListener {
                 live = !live
                 bind.btnLive.text = if (live) "Live:вкл" else "Live:выкл"
             }
-            addDraggable(bind.root, Gravity.TOP or Gravity.START, 24, 160)
+            addDraggable(bind.root, Gravity.TOP or Gravity.START, 24, 140)
         }
         if (side == null) {
             side = LayoutInflater.from(this).inflate(R.layout.overlay_side, null)
             side!!.findViewById<Button>(R.id.btnTranslate).setOnClickListener {
-                if (lastOcr.isBlank()) captureThen(false) else applyTranslate(lastOcr)
+                if (lastOcr.isBlank()) captureThen(false, false) else applyTranslate(lastOcr)
             }
-            side!!.findViewById<Button>(R.id.btnBubbles).setOnClickListener { captureThen(true) }
+            side!!.findViewById<Button>(R.id.btnBubbles).setOnClickListener {
+                EnginePrefs.setScanMode(this, "bubble")
+                captureThen(true, false)
+            }
             side!!.findViewById<Button>(R.id.btnSpeak).setOnClickListener {
                 val t = lastTr.ifBlank { lastOcr }
                 if (t.isNotBlank()) speakNow(t, true)
             }
-            addDraggable(side!!, Gravity.TOP or Gravity.START, 8, 420)
+            addDraggable(side!!, Gravity.TOP or Gravity.START, 8, 400)
+        }
+        if (fab == null) {
+            val tv = TextView(this)
+            tv.text = "Текст"
+            tv.setTextColor(0xFFFFFFFF.toInt())
+            tv.setBackgroundColor(0xE05B8DEF.toInt())
+            tv.setPadding(28, 18, 28, 18)
+            tv.setOnClickListener { showResult(lastOcr, lastTr.ifBlank { "—" }) }
+            fab = tv
+            addDraggable(tv, Gravity.BOTTOM or Gravity.END, 24, 24)
+            tv.visibility = View.INVISIBLE
         }
     }
 
-    private fun updateLang(tv: TextView) {
-        tv.text = EnginePrefs.scanLang(this)
-    }
+    private fun updateLang(tv: TextView) { tv.text = EnginePrefs.scanLang(this) }
 
     private fun addDraggable(v: View, gravity: Int, x: Int, y: Int) {
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
         )
         lp.gravity = gravity; lp.x = x; lp.y = y
-        var px = 0; var py = 0
-        v.setOnTouchListener { _, e ->
+        var px = 0f; var py = 0f
+        v.setOnTouchListener { view, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> { px = e.rawX.toInt(); py = e.rawY.toInt(); false }
+                MotionEvent.ACTION_DOWN -> {
+                    px = e.rawX; py = e.rawY
+                    false
+                }
                 MotionEvent.ACTION_MOVE -> {
-                    lp.x += e.rawX.toInt() - px; lp.y += e.rawY.toInt() - py
-                    px = e.rawX.toInt(); py = e.rawY.toInt()
-                    try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+                    view.translationX += e.rawX - px
+                    view.translationY += e.rawY - py
+                    px = e.rawX; py = e.rawY
                     true
                 }
                 else -> false
@@ -209,6 +227,18 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun startRegionPick() {
+        when (EnginePrefs.regionMode(this)) {
+            "screen" -> {
+                region = RectF(screenW * 0.04f, screenH * 0.08f, screenW * 0.96f, screenH * 0.92f)
+                showResult("экран выбран — Скан", "")
+                return
+            }
+            "wide" -> {
+                region = RectF(screenW * 0.06f, screenH * 0.28f, screenW * 0.94f, screenH * 0.72f)
+                showResult("полоса выбрана — Скан", "")
+                return
+            }
+        }
         if (regionView != null) return
         setChrome(false)
         val rv = RegionView(this)
@@ -224,14 +254,16 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             try { wm.removeView(rv) } catch (_: Exception) {}
             regionView = null
             setChrome(true)
-            showResult("область выбрана — Скан", "затем Перевести слева")
+            showResult("область выбрана — Скан", "")
         }
         wm.addView(rv, lp)
     }
 
     private fun setChrome(show: Boolean) {
         val vis = if (show) View.VISIBLE else View.INVISIBLE
-        bubble?.visibility = vis; side?.visibility = vis; resultView?.visibility = vis
+        bubble?.visibility = vis
+        side?.visibility = vis
+        if (!show) resultView?.visibility = View.INVISIBLE
     }
 
     private fun showResult(src: String, dst: String) {
@@ -239,28 +271,34 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             if (resultView == null) {
                 resultView = LayoutInflater.from(this).inflate(R.layout.overlay_result, null)
                 val lp = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    PixelFormat.TRANSLUCENT
                 )
-                lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                lp.y = 100
                 wm.addView(resultView, lp)
             }
             resultView?.visibility = View.VISIBLE
+            fab?.visibility = View.INVISIBLE
             resultView?.findViewById<TextView>(R.id.srcText)?.text = src
             resultView?.findViewById<TextView>(R.id.dstText)?.text = dst
+            val sc = resultView?.findViewById<ScrollView>(R.id.resultScroll)
             resultView?.findViewById<Button>(R.id.btnCopy)?.setOnClickListener {
                 val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("tr", dst.ifBlank { src }))
             }
+            resultView?.findViewById<Button>(R.id.btnDown)?.setOnClickListener {
+                sc?.post { sc.fullScroll(View.FOCUS_DOWN) }
+            }
             resultView?.findViewById<Button>(R.id.btnHide)?.setOnClickListener {
                 resultView?.visibility = View.INVISIBLE
+                fab?.visibility = View.VISIBLE
             }
+            sc?.post { sc.fullScroll(View.FOCUS_DOWN) }
         }
     }
 
-    private fun captureThen(ocrOnly: Boolean) {
+    private fun captureThen(ocrOnly: Boolean, livePass: Boolean) {
         val r = region ?: return
         if (!busy.compareAndSet(false, true)) return
         setChrome(false)
@@ -268,13 +306,16 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             Thread {
                 try {
                     val piece = grab(r) ?: return@Thread
+                    val h = cheapHash(piece)
+                    if (livePass && lastHash != 0 && almostSame(h, lastHash)) return@Thread
+                    lastHash = h
                     val text = ocr?.read(piece, EnginePrefs.ocr(this), scanLang()).orEmpty().trim()
                     if (text.isBlank()) {
-                        showResult("(пусто — смените OCR/алфавит)", ""); return@Thread
+                        showResult("(пусто — повторите скан)", ""); return@Thread
                     }
                     if (text == lastOcr && ocrOnly) return@Thread
                     lastOcr = text; lastTr = ""
-                    showResult(text, if (ocrOnly) "нажмите «Перевести»" else "")
+                    showResult(text, if (ocrOnly) "Перевести слева" else "")
                     if (!ocrOnly) applyTranslate(text)
                 } catch (_: Exception) {
                 } finally {
@@ -282,7 +323,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     busy.set(false)
                 }
             }.start()
-        }, 90)
+        }, 40)
     }
 
     private fun applyTranslate(text: String) {
@@ -290,11 +331,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             val joined = text.replace('\n', ' ')
             val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
             val known = phrases?.ruOf(joined)
-            val out = when {
-                skip -> text
+            var out = when {
+                skip -> RuText.clean(text)
                 known != null -> known
                 else -> translator?.translate(joined, EnginePrefs.tr(this)) ?: text
             }
+            out = RuText.clean(out)
             lastTr = out
             showResult(text, out)
             if (speak) speakNow(out, false)
@@ -307,8 +349,29 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         handler.post {
             VoiceHelper.apply(tts, voiceKind, voiceName)
             tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "t")
+            resultView?.findViewById<ScrollView>(R.id.resultScroll)?.post {
+                resultView?.findViewById<ScrollView>(R.id.resultScroll)?.fullScroll(View.FOCUS_DOWN)
+            }
         }
     }
+
+    private fun cheapHash(b: Bitmap): Int {
+        val stepX = (b.width / 12).coerceAtLeast(1)
+        val stepY = (b.height / 12).coerceAtLeast(1)
+        var h = 1
+        var y = 0
+        while (y < b.height) {
+            var x = 0
+            while (x < b.width) {
+                h = 31 * h + (b.getPixel(x, y) and 0x00F0F0F0)
+                x += stepX
+            }
+            y += stepY
+        }
+        return h
+    }
+
+    private fun almostSame(a: Int, b: Int) = abs(a - b) < 40_000
 
     private fun grab(r: RectF): Bitmap? {
         val img = reader?.acquireLatestImage() ?: reader?.acquireNextImage() ?: return null
@@ -340,10 +403,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
-        try { bubble?.let { wm.removeView(it) } } catch (_: Exception) {}
-        try { side?.let { wm.removeView(it) } } catch (_: Exception) {}
-        try { resultView?.let { wm.removeView(it) } } catch (_: Exception) {}
-        try { regionView?.let { wm.removeView(it) } } catch (_: Exception) {}
+        listOf(bubble, side, resultView, fab, regionView).forEach { v ->
+            try { v?.let { wm.removeView(it) } } catch (_: Exception) {}
+        }
         vdisplay?.release(); reader?.close(); projection?.stop()
         ocr?.close(); tts?.shutdown()
         super.onDestroy()
