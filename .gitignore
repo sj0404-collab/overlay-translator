@@ -8,3 +8,4 @@ app/build/
 *.apk
 *.aab
 dist/
+tools/fonts/

@@ -55,6 +55,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var vision: OnnxVision? = null
     private var tess: TessOcr? = null
     private var translator: Translator? = null
+    private var phrases: PhraseBank? = null
     private var scanLang = ScanLang.EN
     private var live = false
     private var speak = true
@@ -106,6 +107,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             vision = OnnxVision(this)
             tess = TessOcr(this)
             translator = Translator(this)
+            phrases = PhraseBank(this)
         }.start()
     }
 
@@ -325,18 +327,23 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun ocrBitmap(src: Bitmap): String {
         val prep = ImagePrep.prepareForOcr(src)
         var text = tess?.read(prep).orEmpty()
-        if (text.length < 2) {
-            val crnn = vision?.crnnLine(prep).orEmpty()
-            if (crnn.length > text.length) text = crnn
-        }
-        val en = scanLang != ScanLang.RU
-        return ImagePrep.cleanOcr(text, en && scanLang == ScanLang.EN)
+        val crnn = vision?.crnnLine(prep).orEmpty()
+        if (crnn.length > text.length + 2) text = crnn
+        val en = scanLang == ScanLang.EN
+        text = ImagePrep.cleanOcr(text, en)
+        text = phrases?.correct(text) ?: text
+        return text
     }
 
     private fun applyTranslate(text: String) {
         Thread {
-            val out = if (scanLang == ScanLang.RU) text
-            else translator?.translate(text.replace('\n', ' '), trMode) ?: text
+            val joined = text.replace('\n', ' ')
+            val known = phrases?.ruOf(joined)
+            val out = when {
+                scanLang == ScanLang.RU -> text
+                known != null -> known
+                else -> translator?.translate(joined, trMode) ?: text
+            }
             lastTr = out
             showResult(text, out)
             if (speak) speakNow(out, force = false)
