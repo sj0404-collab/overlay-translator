@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 
 class OcrRouter(private val ctx: Context) {
     private val tess = TessOcr(ctx)
-    private val yolo = YoloDetector(ctx)
+    private val seeneva = SeenevaDetector(ctx)
 
     fun setLang(l: ScanLang) { tess.reopen(l) }
 
@@ -18,7 +18,7 @@ class OcrRouter(private val ctx: Context) {
             val raw = when (engine) {
                 "mlkit" -> MlKitOcr.read(src).ifBlank { tess.read(prep()) }
                 "tess" -> tess.read(prep()).ifBlank { MlKitOcr.read(src) }
-                "yolo" -> yoloOcr(src, lang)
+                "yolo" -> seenevaOcr(src)
                 "openrouter" -> LlmClient.visionOpenRouter(src, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx), ruOnly)
                     ?: LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
                     ?: localStack(src, prep())
@@ -48,8 +48,8 @@ class OcrRouter(private val ctx: Context) {
         }.joinToString("\n")
     }
 
-    private fun yoloOcr(src: Bitmap, lang: ScanLang): String {
-        val boxes = yolo.boxes(src)
+    private fun seenevaOcr(src: Bitmap): String {
+        val boxes = seeneva.boxes(src)
         val parts = ArrayList<String>()
         for (r in boxes) {
             val crop = Bitmap.createBitmap(src, r.left, r.top, r.width(), r.height())
@@ -70,6 +70,6 @@ class OcrRouter(private val ctx: Context) {
 
     fun close() {
         tess.close()
-        yolo.close()
+        seeneva.close()
     }
 }

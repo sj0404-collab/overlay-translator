@@ -6,7 +6,7 @@
         <RadioGroup android:id="@+id/ocrGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
             <RadioButton android:id="@+id/ocrZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Zen Vision (облако, без ключа)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter Vision (:free + ключ)" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/ocrYolo" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="YOLO v5n + ML Kit / Tesseract (локально)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrYolo" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Seeneva YOLOv4-tiny — речевые баблы (локально)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrMlkit" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ML Kit Text (локально, Google)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrTess" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tesseract rus/eng (локально)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Local stack: ML Kit → Tesseract → баблы" android:textColor="#E8EEF8" />

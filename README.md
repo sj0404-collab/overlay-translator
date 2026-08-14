@@ -9,11 +9,20 @@ Android-оверлей для цепочки **область экрана → O
 - Захват экрана через официальный Android `MediaProjection`, без root.
 - Выбор произвольной области, широкой полосы или почти всего экрана.
 - Разовый и live-режимы; неизменившиеся кадры пропускаются perceptual hash.
-- OCR: ML Kit, Tesseract EN/RU, локальный fallback, экспериментальный ONNX detector, Zen Vision и OpenRouter Vision.
+- OCR: ML Kit, Tesseract EN/RU, локальный fallback, **Seeneva YOLOv4-tiny для речевых баблов**, Zen Vision и OpenRouter Vision.
 - Перевод EN → RU: офлайн ML Kit NMT, локальный словарь, Zen, OpenRouter и сетевые fallback-движки.
 - Озвучка системными русскими TTS-голосами (Google TTS, RHVoice и совместимые движки).
 - Копирование результата и повторное открытие скрытого окна.
 - Android 8+ (`minSdk 26`), ARM64.
+
+## Что улучшено в 5.1
+
+- Вместо общего COCO YOLOv5n подключена специализированная модель Seeneva YOLOv4-tiny.
+- Модель обучена примерно на 10 000 речевых баблов из комиксов и манги.
+- Добавлены wide-page slicing, сохранение пропорций, top-left padding, восстановление координат и NMS.
+- OCR применяется к найденным баблам в порядке чтения; при отсутствии детекций работает безопасный local fallback.
+- Удалены неиспользуемые ONNX-модели и тяжёлый ONNX Runtime; APK не раздувается двумя ML-runtime одновременно.
+- Добавлены точная upstream-ревизия, GPL-лицензия, уведомление об авторстве и воспроизводимый sync-скрипт.
 
 ## Что улучшено в 5.0
 
@@ -68,14 +77,14 @@ Android-оверлей для цепочки **область экрана → O
 
 | Задача | Локально | Облако |
 |---|---|---|
-| OCR | ML Kit, Tesseract, local stack, ONNX | Zen Vision, OpenRouter Vision |
+| OCR | ML Kit, Tesseract, local stack, Seeneva YOLOv4-tiny | Zen Vision, OpenRouter Vision |
 | Перевод | ML Kit NMT, словарь | Zen, OpenRouter, Google fallback |
 | Голос | Android TTS / RHVoice | — |
 
 - Текущая качественно поддерживаемая языковая пара перевода — EN → RU.
 - Наличие и названия бесплатных облачных моделей могут меняться у провайдера.
 - Системные голоса зависят от TTS-движка, установленного на устройстве.
-- ONNX detector экспериментальный; для обычного текста сначала попробуйте ML Kit/local stack.
+- Seeneva detector находит речевые баблы и панели; в OCR передаются баблы. Это детекция прямоугольников, а не pixel-mask сегментация.
 
 ## Архитектура
 
@@ -84,8 +93,13 @@ Android-оверлей для цепочки **область экрана → O
 - `Translator` / `LocalNmt` / `LlmClient` — перевод.
 - `VoiceHelper` — выбор и настройка TTS.
 - `ImagePrep` / `PerceptualHash` — подготовка изображения и дедупликация кадров.
+- `SeenevaDetector` — локальная детекция речевых баблов моделью Seeneva.
 - `EnginePrefs` — пользовательские настройки движков.
 
 ## Безопасность и вклад в проект
 
 См. [SECURITY.md](SECURITY.md) и [CONTRIBUTING.md](CONTRIBUTING.md). Никогда не добавляйте токены, keystore и пароли в репозиторий.
+
+## Лицензия и Seeneva
+
+Проект распространяется по **GPL-3.0-or-later** в соответствии с [LICENSE](LICENSE). Модель речевых баблов взята из Seeneva с фиксацией точной upstream-ревизии; подробности и авторство указаны в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Скрипт `tools/sync_seeneva_model.sh` позволяет воспроизводимо обновить модель из проверенной ревизии.
