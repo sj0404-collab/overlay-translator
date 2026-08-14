@@ -32,7 +32,6 @@ import android.widget.TextView
 import com.overlay.translator.databinding.OverlayBubbleBinding
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.abs
 
 class OverlayService : Service(), TextToSpeech.OnInitListener {
     companion object {
@@ -62,9 +61,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var region: RectF? = null
     private var lastOcr = ""
     private var lastTr = ""
-    private var lastHash = 0
+    private var lastHash = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val busy = AtomicBoolean(false)
+    private val translating = AtomicBoolean(false)
     private var lastSpoken = ""
     private var projection: MediaProjection? = null
     private var vdisplay: VirtualDisplay? = null
@@ -75,7 +75,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (live && region != null && !busy.get()) captureThen(ocrOnly = true, livePass = true)
+            if (live && region != null && !busy.get()) captureThen(ocrOnly = false, livePass = true)
             handler.postDelayed(this, 5200)
         }
     }
@@ -107,7 +107,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
-                live = false
+                live = EnginePrefs.live(this)
                 speak = EnginePrefs.speak(this)
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
@@ -163,8 +163,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             bind.btnOnce.setOnClickListener {
                 if (region == null) startRegionPick() else captureThen(true, false)
             }
+            bind.btnLive.text = if (live) "Live:вкл" else "Live:выкл"
             bind.btnLive.setOnClickListener {
                 live = !live
+                EnginePrefs.setLive(this, live)
                 bind.btnLive.text = if (live) "Live:вкл" else "Live:выкл"
             }
             addDraggable(bind.root, Gravity.TOP or Gravity.START, 24, 140)
@@ -306,40 +308,57 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             Thread {
                 try {
                     val piece = grab(r) ?: return@Thread
-                    val h = cheapHash(piece)
-                    if (livePass && lastHash != 0 && almostSame(h, lastHash)) return@Thread
-                    lastHash = h
-                    val text = ocr?.read(piece, EnginePrefs.ocr(this), scanLang()).orEmpty().trim()
-                    if (text.isBlank()) {
-                        showResult("(пусто — повторите скан)", ""); return@Thread
+                    try {
+                        val h = PerceptualHash.of(piece)
+                        if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread
+                        lastHash = h
+                        val router = ocr
+                        if (router == null) {
+                            showResult("OCR ещё запускается…", "Повторите через секунду")
+                            return@Thread
+                        }
+                        val text = router.read(piece, EnginePrefs.ocr(this), scanLang()).trim()
+                        if (text.isBlank()) {
+                            showResult("(пусто — повторите скан)", ""); return@Thread
+                        }
+                        if (text == lastOcr && ocrOnly) return@Thread
+                        lastOcr = text; lastTr = ""
+                        showResult(text, if (ocrOnly) "Перевести слева" else "")
+                        if (!ocrOnly) applyTranslate(text)
+                    } finally {
+                        if (!piece.isRecycled) piece.recycle()
                     }
-                    if (text == lastOcr && ocrOnly) return@Thread
-                    lastOcr = text; lastTr = ""
-                    showResult(text, if (ocrOnly) "Перевести слева" else "")
-                    if (!ocrOnly) applyTranslate(text)
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    showResult("Ошибка сканирования", error.message ?: "Не удалось обработать изображение")
                 } finally {
                     handler.post { setChrome(true) }
                     busy.set(false)
                 }
             }.start()
-        }, 40)
+        }, 140)
     }
 
     private fun applyTranslate(text: String) {
+        if (!translating.compareAndSet(false, true)) return
         Thread {
-            val joined = text.replace('\n', ' ')
-            val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
-            val known = phrases?.ruOf(joined)
-            var out = when {
-                skip -> RuText.clean(text)
-                known != null -> known
-                else -> translator?.translate(joined, EnginePrefs.tr(this)) ?: text
+            try {
+                val joined = text.replace('\n', ' ')
+                val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
+                val known = phrases?.ruOf(joined)
+                var out = when {
+                    skip -> RuText.clean(text)
+                    known != null -> known
+                    else -> translator?.translate(joined, EnginePrefs.tr(this)) ?: text
+                }
+                out = RuText.clean(out)
+                lastTr = out
+                showResult(text, out)
+                if (speak) speakNow(out, false)
+            } catch (error: Exception) {
+                showResult(text, "Ошибка перевода: ${error.message ?: "неизвестная ошибка"}")
+            } finally {
+                translating.set(false)
             }
-            out = RuText.clean(out)
-            lastTr = out
-            showResult(text, out)
-            if (speak) speakNow(out, false)
         }.start()
     }
 
@@ -354,24 +373,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             }
         }
     }
-
-    private fun cheapHash(b: Bitmap): Int {
-        val stepX = (b.width / 12).coerceAtLeast(1)
-        val stepY = (b.height / 12).coerceAtLeast(1)
-        var h = 1
-        var y = 0
-        while (y < b.height) {
-            var x = 0
-            while (x < b.width) {
-                h = 31 * h + (b.getPixel(x, y) and 0x00F0F0F0)
-                x += stepX
-            }
-            y += stepY
-        }
-        return h
-    }
-
-    private fun almostSame(a: Int, b: Int) = abs(a - b) < 40_000
 
     private fun grab(r: RectF): Bitmap? {
         val img = reader?.acquireLatestImage() ?: reader?.acquireNextImage() ?: return null
@@ -389,8 +390,14 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 r.right.toInt().coerceIn(1, screenW),
                 r.bottom.toInt().coerceIn(1, screenH)
             )
-            if (crop.width() < 8 || crop.height() < 8) null
-            else Bitmap.createBitmap(bmp, crop.left, crop.top, crop.width(), crop.height())
+            if (crop.width() < 8 || crop.height() < 8) {
+                bmp.recycle()
+                null
+            } else {
+                val result = Bitmap.createBitmap(bmp, crop.left, crop.top, crop.width(), crop.height())
+                bmp.recycle()
+                result
+            }
         } finally { img.close() }
     }
 

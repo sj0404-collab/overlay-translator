@@ -163,6 +163,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             EnginePrefs.setTr(this, when (id) {
                 b.trGoogle.id -> "google"
                 b.trOr.id -> "openrouter"
+                b.trLocal.id -> "local"
                 b.trAuto.id -> "auto"
                 else -> "zen"
             })

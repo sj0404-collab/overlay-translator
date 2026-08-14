@@ -12,20 +12,24 @@ class OcrRouter(private val ctx: Context) {
     fun read(src: Bitmap, engine: String, lang: ScanLang): String {
         tess.reopen(lang)
         val ruOnly = lang == ScanLang.RU
-        val prep = ImagePrep.prepareForOcr(src)
-        val raw = when (engine) {
-            "mlkit" -> MlKitOcr.read(src).ifBlank { tess.read(prep) }
-            "tess" -> tess.read(prep).ifBlank { MlKitOcr.read(src) }
-            "yolo" -> yoloOcr(src, lang)
-            "openrouter" -> LlmClient.visionOpenRouter(src, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx), ruOnly)
-                ?: LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
-                ?: localStack(src, prep)
-            "local" -> localStack(src, prep)
-            else -> LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
-                ?: localStack(src, prep)
+        var prepared: Bitmap? = null
+        fun prep(): Bitmap = prepared ?: ImagePrep.prepareForOcr(src).also { prepared = it }
+        return try {
+            val raw = when (engine) {
+                "mlkit" -> MlKitOcr.read(src).ifBlank { tess.read(prep()) }
+                "tess" -> tess.read(prep()).ifBlank { MlKitOcr.read(src) }
+                "yolo" -> yoloOcr(src, lang)
+                "openrouter" -> LlmClient.visionOpenRouter(src, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx), ruOnly)
+                    ?: LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
+                    ?: localStack(src, prep())
+                "local" -> localStack(src, prep())
+                else -> LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
+                    ?: localStack(src, prep())
+            }
+            if (ruOnly) RuText.clean(raw) else raw.trim()
+        } finally {
+            prepared?.takeIf { it !== src && !it.isRecycled }?.recycle()
         }
-        val cleaned = if (ruOnly) RuText.clean(raw) else raw.trim()
-        return cleaned
     }
 
     private fun localStack(src: Bitmap, prep: Bitmap): String {
@@ -35,7 +39,12 @@ class OcrRouter(private val ctx: Context) {
         if (b.length > 3) return b
         return ImagePrep.findBubbles(src).mapNotNull { box ->
             val c = Bitmap.createBitmap(src, box.rect.left, box.rect.top, box.rect.width(), box.rect.height())
-            MlKitOcr.read(c).ifBlank { tess.read(ImagePrep.prepareForOcr(c)) }.ifBlank { null }
+            try {
+                MlKitOcr.read(c).ifBlank {
+                    val p = ImagePrep.prepareForOcr(c)
+                    try { tess.read(p) } finally { if (p !== c) p.recycle() }
+                }.ifBlank { null }
+            } finally { c.recycle() }
         }.joinToString("\n")
     }
 
@@ -44,10 +53,18 @@ class OcrRouter(private val ctx: Context) {
         val parts = ArrayList<String>()
         for (r in boxes) {
             val crop = Bitmap.createBitmap(src, r.left, r.top, r.width(), r.height())
-            val t = MlKitOcr.read(crop).ifBlank { tess.read(ImagePrep.prepareForOcr(crop)) }
+            val t = try {
+                MlKitOcr.read(crop).ifBlank {
+                    val p = ImagePrep.prepareForOcr(crop)
+                    try { tess.read(p) } finally { if (p !== crop) p.recycle() }
+                }
+            } finally { crop.recycle() }
             if (t.length > 1) parts.add(t)
         }
-        if (parts.isEmpty()) return localStack(src, ImagePrep.prepareForOcr(src))
+        if (parts.isEmpty()) {
+            val p = ImagePrep.prepareForOcr(src)
+            return try { localStack(src, p) } finally { if (p !== src) p.recycle() }
+        }
         return parts.joinToString("\n")
     }
 
