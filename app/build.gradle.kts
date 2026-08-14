@@ -60,7 +60,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.28.0")
     implementation("com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:translate:17.0.3")
