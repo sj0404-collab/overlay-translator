@@ -257,13 +257,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun setChrome(show: Boolean) {
-        val vis = if (show) View.VISIBLE else View.INVISIBLE
-        side?.visibility = if (show) side?.visibility else View.INVISIBLE
         if (!show) {
+            side?.visibility = View.INVISIBLE
             resultView?.visibility = View.INVISIBLE
-            fab?.visibility = View.VISIBLE // always show the trigger FAB
+            fab?.visibility = View.VISIBLE
         } else {
-            // Keep panel hidden by default; user taps FAB to open it
             side?.visibility = View.INVISIBLE
         }
     }
