@@ -152,21 +152,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     captureThen(ocrOnly = !autoTranslate)
                 }
             },
-            VerticalMenuView.VerticalItem("Область", "⬚") { startRegionPick() },
             VerticalMenuView.VerticalItem(
                 "Зона: ${regionLabel(regionPreset)}", "📐"
             ) { cycleRegionPreset() },
-            VerticalMenuView.VerticalItem("Перевести", "🌐") {
-                if (lastOcr.isNotBlank()) applyTranslate(lastOcr)
-                else toast("Сначала скан")
-            },
-            VerticalMenuView.VerticalItem("Live + Перевод", if (live) "🟢" else "⚪") {
-                live = !live; EnginePrefs.setLive(this, live)
-                autoTranslate = !autoTranslate; EnginePrefs.setAutoTranslate(this, autoTranslate)
-                menu?.collapse() // Collapse after toggling
-                handler.postDelayed({ showMenu() }, 250) // Re-show with updated state
-                toast(if (autoTranslate) "Live перевод: вкл" else "Live перевод: выкл")
-            },
+            VerticalMenuView.VerticalItem(
+                "Live ${if (autoTranslate) "+ Перевод" else ""}", if (live) "🟢" else "⚪"
+            ) { toggleLive() },
             VerticalMenuView.VerticalItem("Озвучить", "🔊") {
                 try {
                     if (ttsReady) {

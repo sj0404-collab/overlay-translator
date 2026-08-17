@@ -62,7 +62,9 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
 
     fun expandedHeight(): Float = (triggerH + items.size * (itemH + gap) + gap) * 1.1f
 
-    fun toggle() { if (expanded) collapse() else expand() }
+    fun toggle() {
+        if (expanded) collapse() else expand()
+    }
 
     fun expand() {
         expanded = true
@@ -149,7 +151,7 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
                         if (event.x in (rx - 10)..(rx + itemW + 10) &&
                             event.y in (y - 10)..(y + itemH + 10)) {
                             collapse()
-                            postDelayed({ items[i].onClick() }, 200)
+                            postDelayed({ items[i].onClick() }, 250)
                             return true
                         }
                     }
