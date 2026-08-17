@@ -3,14 +3,21 @@
     android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0B1220">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OCR / детектор / LLM" android:textColor="#8BA4D9" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Движки сканера (читательский стек Yomihon)" android:textColor="#94A3B8" />
         <RadioGroup android:id="@+id/ocrGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/ocrZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Zen Vision (облако, без ключа)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Zen Free (облако, без ключа, через Glens)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrGlens" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google Lens (онлайн, ключ вшит)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/ocrGoogle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google AI / Gemini Vision (нужен ключ)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter Vision (:free + ключ)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrYolo" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Seeneva YOLOv4-tiny — речевые баблы (локально)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrMlkit" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ML Kit Text (локально, Google)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrTess" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tesseract rus/eng (локально)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/ocrLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Local stack: ML Kit → Tesseract → баблы" android:textColor="#E8EEF8" />
         </RadioGroup>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Google AI (Gemini) ключ" android:textColor="#5B8DEF" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Бесплатный ключ: aistudio.google.com/app/apikey. Без него движок google отключится." android:textColor="#94A3B8" />
+        <Spinner android:id="@+id/googleModel" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="6dp" android:background="#162033" />
+        <EditText android:id="@+id/googleKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="AIzaSy…" android:inputType="textPassword" android:textColor="#FFFFFF" android:textColorHint="#64748B" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Вид скана / области" android:textColor="#8BA4D9" />
         <RadioGroup android:id="@+id/scanModeGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
             <RadioButton android:id="@+id/scanRect" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Кроп целиком" android:textColor="#E8EEF8" />

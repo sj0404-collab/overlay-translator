@@ -4,6 +4,8 @@ import android.content.Context
 import java.io.File
 
 object AssetCopy {
+    private const val LABELS = "labels"
+
     fun ensureTess(ctx: Context): File {
         val dir = File(ctx.filesDir, "tesseract")
         val td = File(dir, "tessdata")
@@ -27,4 +29,9 @@ object AssetCopy {
         }
         return out
     }
+
+    /** Asset path inside the bundled assets/ directory used by
+     *  [Translator] and [PhraseBank]. Lets both depend on a single
+     *  shared source of truth (Yomihon's reader-app layout). */
+    fun labelsAsset(name: String): String = "$LABELS/$name"
 }

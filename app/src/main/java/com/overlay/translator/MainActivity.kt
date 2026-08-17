@@ -95,8 +95,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireOcr(b: TabOcrBinding) {
+        // Block temporarily so setChecked() doesn't fire onCheckedChange while restoring.
+        b.ocrGroup.setOnCheckedChangeListener(null)
+        b.langGroup.setOnCheckedChangeListener(null)
+        b.scanModeGroup.setOnCheckedChangeListener(null)
+        b.regionModeGroup.setOnCheckedChangeListener(null)
+
         when (EnginePrefs.ocr(this)) {
             "openrouter" -> b.ocrOr.isChecked = true
+            "glens" -> b.ocrGlens.isChecked = true
+            "google" -> b.ocrGoogle.isChecked = true
             "yolo" -> b.ocrYolo.isChecked = true
             "mlkit" -> b.ocrMlkit.isChecked = true
             "tess" -> b.ocrTess.isChecked = true
@@ -118,9 +126,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             "screen" -> b.regScreen.isChecked = true
             else -> b.regRect.isChecked = true
         }
+
+        // Google AI model + key
+        b.googleModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.GEMINI_FREE)
+        b.googleModel.setSelection(LlmClient.GEMINI_FREE.indexOf(EnginePrefs.googleModel(this)).coerceAtLeast(0))
+        b.googleModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                EnginePrefs.setGoogleModel(this@MainActivity, LlmClient.GEMINI_FREE[pos])
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        b.googleKey.setText(EnginePrefs.googleApiKey(this))
+        b.googleKey.setOnFocusChangeListener { _, has ->
+            if (!has) EnginePrefs.setGoogleApiKey(this, b.googleKey.text.toString().trim())
+        }
+
         b.ocrGroup.setOnCheckedChangeListener { _, id ->
             EnginePrefs.setOcr(this, when (id) {
                 b.ocrOr.id -> "openrouter"
+                b.ocrGlens.id -> "glens"
+                b.ocrGoogle.id -> "google"
                 b.ocrYolo.id -> "yolo"
                 b.ocrMlkit.id -> "mlkit"
                 b.ocrTess.id -> "tess"
@@ -152,18 +177,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireTr(b: TabTranslateBinding) {
+        b.trGroup.setOnCheckedChangeListener(null)
+
         when (EnginePrefs.tr(this)) {
             "google" -> b.trGoogle.isChecked = true
             "openrouter" -> b.trOr.isChecked = true
             "local" -> b.trLocal.isChecked = true
+            "mymemory" -> b.trMymemory.isChecked = true
             "auto" -> b.trAuto.isChecked = true
+            "googleai" -> b.trGoogleAi.isChecked = true
             else -> b.trZen.isChecked = true
         }
         b.trGroup.setOnCheckedChangeListener { _, id ->
             EnginePrefs.setTr(this, when (id) {
                 b.trGoogle.id -> "google"
+                b.trGoogleAi.id -> "googleai"
                 b.trOr.id -> "openrouter"
                 b.trLocal.id -> "local"
+                b.trMymemory.id -> "mymemory"
                 b.trAuto.id -> "auto"
                 else -> "zen"
             })
@@ -187,6 +218,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         b.orKey.setText(EnginePrefs.openrouterKey(this))
         b.orKey.setOnFocusChangeListener { _, has ->
             if (!has) EnginePrefs.setOpenrouterKey(this, b.orKey.text.toString().trim())
+        }
+        b.googleKey.setText(EnginePrefs.googleApiKey(this))
+        b.googleKey.setOnFocusChangeListener { _, has ->
+            if (!has) EnginePrefs.setGoogleApiKey(this, b.googleKey.text.toString().trim())
         }
     }
 

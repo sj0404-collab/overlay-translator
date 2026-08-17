@@ -2,19 +2,23 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0B1220">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Перевод на русский" android:textColor="#8BA4D9" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Переводчик (читательский стек Yomihon)" android:textColor="#8BA4D9" android:textStyle="bold" />
         <RadioGroup android:id="@+id/trGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
-            <RadioButton android:id="@+id/trZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="OpenCode Zen (без ключа)" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/trOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter :free" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/trGoogle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google (без ключа)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trZen" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Zen Vision (без ключа)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trGoogleAi" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google AI / Gemini перевод (нужен ключ)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trOr" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OpenRouter :free (нужен ключ)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trGoogle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google Translate Free (без ключа)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Local NMT (ML Kit, офлайн модель)" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/trMymemory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="MyMemory (бесплатный API)" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/trAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Авто: Local NMT → Zen → Google" android:textColor="#E8EEF8" />
         </RadioGroup>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Модель Zen Vision / перевод" android:textColor="#8BA4D9" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Модель Zen (Vision/перевод)" android:textColor="#8BA4D9" />
         <Spinner android:id="@+id/zenModel" android:layout_width="match_parent" android:layout_height="48dp" android:background="#162033" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="OpenRouter" android:textColor="#5B8DEF" android:textStyle="bold" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ключ с openrouter.ai/keys — без него OpenRouter не работает (401). Zen ключа не требует." android:textColor="#94A3B8" />
         <Spinner android:id="@+id/orModel" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="6dp" android:background="#162033" />
         <EditText android:id="@+id/orKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="sk-or-v1-…" android:inputType="textPassword" android:textColor="#FFFFFF" android:textColorHint="#64748B" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Google AI (Gemini) ключ" android:textColor="#5B8DEF" android:textStyle="bold" />
+        <EditText android:id="@+id/googleKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="AIzaSy…" android:inputType="textPassword" android:textColor="#FFFFFF" android:textColorHint="#64748B" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Этот же ключ используется Google Vision OCR" android:textColor="#94A3B8" />
     </LinearLayout>
 </ScrollView>

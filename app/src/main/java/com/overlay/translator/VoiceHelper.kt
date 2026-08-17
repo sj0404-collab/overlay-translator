@@ -7,20 +7,28 @@ import java.util.Locale
 enum class VoiceKind { FEMALE, MALE, TEEN, OTHER }
 
 object VoiceHelper {
-    // Names from the reference app voice map (Svetlana / Dmitry), plus common Google/RHVoice.
+    /** Russian voice name hints lifted from Yomihon's reader (`Svetlana /
+     *  Dmitriy`) plus extra names that ship with RHVoice, Google TTS and
+     *  Sherpa-ONNX. Used purely for UI labels. */
     private val femaleHints = listOf(
-        "female", "woman", "svetlana", "milena", "oksana", "irina", "jane", "ksenia", "alena", "жен"
+        "female", "woman", "svetlana", "milena", "oksana", "irina", "jane", "ksenia",
+        "alena", "yelena", "elena", "anna", "maria", "natalia", "natalya", "tatyana",
+        "жен", "женск", "девуш",
     )
     private val maleHints = listOf(
-        "male", "man", "dmitry", "dmitri", "ermil", "filipp", "zahar", "pavel", "муж"
+        "male", "man", "dmitry", "dmitri", "ermil", "filipp", "zahar", "pavel",
+        "alexander", "maxim", "andrey", "ivan", "sergey", "муж",
     )
     private val teenHints = listOf("child", "kid", "teen", "young", "дет", "подрост")
+    /** System TTS voices we should ignore even if locale matches. */
+    private val blacklist = listOf("locale", "default", "test")
 
     fun russianVoices(tts: TextToSpeech?): List<Voice> {
         val all = tts?.voices ?: return emptyList()
         return all.filter {
             val t = (it.locale.language + " " + it.locale.toLanguageTag() + " " + it.name).lowercase(Locale.US)
-            t.contains("ru") || it.locale.language.equals("ru", true)
+            (t.contains("ru") || it.locale.language.equals("ru", true)) &&
+                blacklist.none { b -> t.contains(b) }
         }.sortedBy { it.name }
     }
 
@@ -51,5 +59,21 @@ object VoiceHelper {
         tts.language = Locale("ru", "RU")
         tts.setSpeechRate(0.96f)
         pick(tts, kind, exactName)?.let { tts.voice = it }
+    }
+
+    /** Light wrapper to keep the public selection used by Yomihon's reader
+     *  (e.g. `ru-ru-x-dfa-network`) compatible. If the given key is a real
+     *  installed voice name, it is honoured; otherwise we fall back to the
+     *  kind-based picker. */
+    fun applyCompat(tts: TextToSpeech?, kind: VoiceKind, keyOrName: String?) {
+        if (keyOrName.isNullOrBlank()) {
+            apply(tts, kind, null); return
+        }
+        val exact = russianVoices(tts).firstOrNull { it.name == keyOrName }
+        if (exact != null) {
+            apply(tts, kind, exact.name)
+        } else {
+            apply(tts, kind, null)
+        }
     }
 }

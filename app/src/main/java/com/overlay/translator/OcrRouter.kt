@@ -3,9 +3,28 @@ package com.overlay.translator
 import android.content.Context
 import android.graphics.Bitmap
 
+/**
+ * Routes bitmap OCR through one of:
+ *   - `mlkit` (default local OCR)
+ *   - `tess` (Tesseract)
+ *   - `yolo` (Seeneva YOLOv4-tiny speech-balloon detector + per-bubble OCR)
+ *   - `glens` (online Google Lens, hardcoded API key)
+ *   - `google` (Gemini Vision, **user API key** from [EnginePrefs])
+ *   - `openrouter` (multimodal Chat Completions, **user API key**)
+ *   - `local` (local stack fallback: MLKit→Tess→bubbles)
+ *   - `zen` (Zen Vision free cloud gateway)
+ *
+ * Mirrors OcrRepositoryImpl's engine selection in Yomihon's reader build,
+ * but uses shared engines (cheap to construct, no DI required) suitable
+ * for the lightweight overlay service.
+ */
 class OcrRouter(private val ctx: Context) {
     private val tess = TessOcr(ctx)
     private val seeneva = SeenevaDetector(ctx)
+    private val glens = GlensOcrEngine()
+    private val zen = ZenFreeOcrEngine(ctx)
+    private var googleEngine: GoogleAiOcrEngine? = null
+    private var orEngine: OpenRouterOcrEngine? = null
 
     fun setLang(l: ScanLang) { tess.reopen(l) }
 
@@ -19,12 +38,20 @@ class OcrRouter(private val ctx: Context) {
                 "mlkit" -> MlKitOcr.read(src).ifBlank { tess.read(prep()) }
                 "tess" -> tess.read(prep()).ifBlank { MlKitOcr.read(src) }
                 "yolo" -> seenevaOcr(src)
-                "openrouter" -> LlmClient.visionOpenRouter(src, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx), ruOnly)
-                    ?: LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
-                    ?: localStack(src, prep())
+                "glens" -> glens.recognizeText(src).ifBlank { localStack(src, prep()) }
+                "google" -> {
+                    val e = googleEngine ?: GoogleAiOcrEngine(ctx).also { googleEngine = it }
+                    e.recognizeText(src).ifBlank { localStack(src, prep()) }
+                }
+                "openrouter" -> {
+                    val e = orEngine ?: OpenRouterOcrEngine(ctx).also { orEngine = it }
+                    e.recognizeText(src).ifBlank { localStack(src, prep()) }
+                }
                 "local" -> localStack(src, prep())
-                else -> LlmClient.visionOcr(src, EnginePrefs.zenModel(ctx), ruOnly, EnginePrefs.scanMode(ctx))
-                    ?: localStack(src, prep())
+                else -> { // 'zen' default (no key required)
+                    LlmClient.visionGemini(ctx, src, ruOnly, EnginePrefs.scanMode(ctx))
+                        ?: zen.recognizeText(src).ifBlank { localStack(src, prep()) }
+                }
             }
             if (ruOnly) RuText.clean(raw) else raw.trim()
         } finally {
@@ -71,5 +98,9 @@ class OcrRouter(private val ctx: Context) {
     fun close() {
         tess.close()
         seeneva.close()
+        googleEngine?.close()
+        googleEngine = null
+        orEngine?.close()
+        orEngine = null
     }
 }
