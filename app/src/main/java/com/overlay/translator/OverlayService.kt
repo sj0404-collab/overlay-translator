@@ -212,6 +212,21 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         else -> p
     }
 
+    private fun applyRegionPreset(): RectF = when (regionPreset) {
+        "screen" -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat())
+        "wide" -> RectF(0f, screenH * 0.30f, screenW.toFloat(), screenH * 0.70f)
+        "bottom" -> RectF(0f, screenH * 0.55f, screenW.toFloat(), screenH * 0.92f)
+        else -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat()) // rect = full screen fallback
+    }
+
+    private fun toggleLive() {
+        live = !live; EnginePrefs.setLive(this, live)
+        autoTranslate = !autoTranslate; EnginePrefs.setAutoTranslate(this, autoTranslate)
+        menu?.collapse()
+        handler.postDelayed({ showMenu() }, 250)
+        toast(if (autoTranslate) "Live перевод: вкл" else "Live: ${if (live) "вкл" else "выкл"}")
+    }
+
     private fun cycleRegionPreset() {
         val presets = listOf("rect", "screen", "wide", "bottom")
         val i = presets.indexOf(regionPreset).coerceAtLeast(0)
