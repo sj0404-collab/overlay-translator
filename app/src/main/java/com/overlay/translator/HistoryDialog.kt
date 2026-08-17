@@ -33,8 +33,7 @@ object HistoryDialog {
         }
         titleRow.addView(title)
 
-        // Spacer
-        val spacer = ViewGroup.LayoutParams(0, 0); spacer.weight = 0f
+        // Spacer to push close button to the right
         val spacerView = TextView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
         }
