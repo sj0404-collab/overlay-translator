@@ -76,9 +76,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun wireOverlay(b: TabOverlayBinding) {
         b.liveMode.isChecked = EnginePrefs.live(this)
-        b.speakMode.isChecked = EnginePrefs.speak(this)
         b.liveMode.setOnCheckedChangeListener { _, v -> EnginePrefs.setLive(this, v) }
-        b.speakMode.setOnCheckedChangeListener { _, v -> EnginePrefs.setSpeak(this, v) }
         b.btnOverlay.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -107,8 +105,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         when (EnginePrefs.regionMode(this)) {
             "wide" -> b.regWide.isChecked = true
             "screen" -> b.regScreen.isChecked = true
+            "bottom" -> b.regBottom.isChecked = true
             else -> b.regRect.isChecked = true
         }
+
+        b.autoTranslate.isChecked = EnginePrefs.autoTranslate(this)
+        b.autoTranslate.setOnCheckedChangeListener { _, v -> EnginePrefs.setAutoTranslate(this, v) }
 
         b.googleModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.GEMINI_FREE)
         b.googleModel.setSelection(LlmClient.GEMINI_FREE.indexOf(EnginePrefs.googleModel(this)).coerceAtLeast(0))
@@ -135,6 +137,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             EnginePrefs.setRegionMode(this, when (id) {
                 b.regWide.id -> "wide"
                 b.regScreen.id -> "screen"
+                b.regBottom.id -> "bottom"
                 else -> "rect"
             })
         }

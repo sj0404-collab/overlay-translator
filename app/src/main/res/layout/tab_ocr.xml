@@ -18,7 +18,10 @@
         <RadioGroup android:id="@+id/regionModeGroup" android:layout_width="match_parent" android:layout_height="wrap_content">
             <RadioButton android:id="@+id/regRect" android:layout_width="match_parent" android:layout_height="wrap_content" android:checked="true" android:text="Область: прямоугольник" android:textColor="#E8EEF8" />
             <RadioButton android:id="@+id/regWide" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Область: широкая полоса" android:textColor="#E8EEF8" />
-            <RadioButton android:id="@+id/regScreen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Область: почти весь экран" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/regScreen" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Область: весь экран" android:textColor="#E8EEF8" />
+            <RadioButton android:id="@+id/regBottom" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Область: нижняя часть" android:textColor="#E8EEF8" />
         </RadioGroup>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Автоперевод (Live)" android:textColor="#8BA4D9" android:textStyle="bold" />
+        <Switch android:id="@+id/autoTranslate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Включить автоперевод после OCR" android:textColor="#E8EEF8" />
     </LinearLayout>
 </ScrollView>

@@ -16,8 +16,7 @@
             android:text="Плавающий оверлей: область → OCR → перевод → голос. Интерфейс вкладок как у экранных переводчиков, движки свои."
             android:textColor="#A8B3C7" />
 
-        <CheckBox android:id="@+id/liveMode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live (только после выбора области)" android:textColor="#E8EEF8" />
-        <CheckBox android:id="@+id/speakMode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="Озвучивать по-русски" android:textColor="#E8EEF8" />
+        <CheckBox android:id="@+id/liveMode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live (постоянный скан)" android:textColor="#E8EEF8" />
 
         <Button android:id="@+id/btnOverlay" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="12dp" android:backgroundTint="#5B8DEF" android:text="Разрешить оверлей" android:textAllCaps="false" />
         <Button android:id="@+id/btnCapture" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="6dp" android:backgroundTint="#3D6BD4" android:text="Разрешить захват экрана" android:textAllCaps="false" />
