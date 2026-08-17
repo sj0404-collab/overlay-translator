@@ -68,6 +68,8 @@ object VoiceHelper {
         }
         try {
             pick(tts, kind, exactName)?.let { tts.voice = it }
+                ?: russianVoices(tts).firstOrNull()?.let { tts.voice = it }
+                    ?: Log.w(TAG, "no Russian voice installed; using system default")
         } catch (e: Exception) {
             Log.w(TAG, "set voice failed", e)
         }
