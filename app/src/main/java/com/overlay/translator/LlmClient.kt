@@ -171,13 +171,13 @@ object LlmClient {
     private fun ocrPrompt(russianOnly: Boolean, scanMode: String): String {
         val lang = if (russianOnly)
             "Текст ТОЛЬКО на русском (кириллица). Латиницу не пиши, кроме имён если они реально на экране."
-        else "English or Russian as on the image."
+        else "Any text visible in this image. English, Russian, Japanese, or any other language. Transcribe exactly as written."
         val modeHint = when (scanMode) {
             "bubble" -> "This is one speech bubble. Extract only the dialogue inside."
             "full" -> "Extract all readable dialogue, top to bottom."
-            else -> "Extract printed comic text in the selected crop."
+            else -> "Extract all printed text in the selected area."
         }
-        return "$modeHint $lang Output ONLY the raw text, keep line breaks. No comments. No transcription notes."
+        return "$modeHint $lang Output ONLY the raw text, keep line breaks and spaces between words. No comments."
     }
 
     private fun guessWords(bmp: Bitmap): Int {

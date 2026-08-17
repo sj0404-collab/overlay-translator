@@ -48,7 +48,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     private lateinit var wm: WindowManager
-    private var radialMenu: RadialMenuView? = null
+    private var menu: VerticalMenuView? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -61,7 +61,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var lastTr = ""
     private var lastHash = 0L
     private var live = false
-    private var speak = true
     private val handler = Handler(Looper.getMainLooper())
     private val busy = AtomicBoolean(false)
     private val translating = AtomicBoolean(false)
@@ -73,7 +72,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (live && region != null && !busy.get()) captureThen(ocrOnly = false, livePass = true)
+            if (live && region != null && !busy.get()) captureThen(ocrOnly = true, livePass = true)
             handler.postDelayed(this, 5200)
         }
     }
@@ -92,10 +91,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         @Suppress("DEPRECATION")
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels; screenH = dm.heightPixels; density = dm.densityDpi
-        Thread {
-            ocr = OcrRouter(this)
-            translator = Translator(this)
-        }.start()
+        Thread { ocr = OcrRouter(this); translator = Translator(this) }.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -103,7 +99,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
                 live = EnginePrefs.live(this)
-                speak = EnginePrefs.speak(this)
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
                 voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
@@ -118,7 +113,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun scanLang() = when (EnginePrefs.scanLang(this)) {
-        "EN" -> ScanLang.EN; "AUTO" -> ScanLang.BOTH; else -> ScanLang.RU
+        "EN" -> ScanLang.EN; "RU" -> ScanLang.RU; else -> ScanLang.BOTH
     }
 
     private fun bindProjection() {
@@ -139,76 +134,74 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         )
     }
 
-    /* ─────── SAO-style radial menu ─────── */
+    /* ─────── Vertical menu ─────── */
 
     private fun showMenu() {
-        if (radialMenu != null) return
+        if (menu != null) return
         val items = listOf(
-            RadialMenuView.RadialItem("Скан", "🔍") {
-                if (region == null) startRegionPick() else captureThen(true, false)
+            VerticalMenuView.VerticalItem("Скан", "🔍") {
+                if (region == null) startRegionPick() else captureThen(ocrOnly = true, livePass = false)
             },
-            RadialMenuView.RadialItem("Область", "⬚") { startRegionPick() },
-            RadialMenuView.RadialItem("Live", if (live) "🟢" else "⚪") {
-                live = !live; EnginePrefs.setLive(this, live)
+            VerticalMenuView.VerticalItem("Область", "⬚") { startRegionPick() },
+            VerticalMenuView.VerticalItem("Перевести", "🌐") {
+                if (lastOcr.isNotBlank()) applyTranslate(lastOcr)
+                else toast("Сначала сделайте скан")
             },
-            RadialMenuView.RadialItem("Голос", "🔊") {
-                if (!ttsReady) { toast("TTS ещё не готов"); return@RadialItem }
+            VerticalMenuView.VerticalItem("Live", if (live) "🟢" else "⚪") {
+                live = !live; EnginePrefs.setLive(this, live); toast(if (live) "Live: вкл" else "Live: выкл")
+            },
+            VerticalMenuView.VerticalItem("Озвучить", "🔊") {
+                if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
                 val t = lastTr.ifBlank { lastOcr }
                 if (t.isNotBlank()) speakNow(t, true)
                 else toast("Нет текста для озвучки")
             },
-            RadialMenuView.RadialItem("Голоса", "🗣") {
-                if (!ttsReady) { toast("TTS ещё не готов"); return@RadialItem }
+            VerticalMenuView.VerticalItem("Выбор голоса", "🗣") {
+                if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
                 VoiceDialog.show(this, voiceName) { name, kind ->
-                    voiceName = name; voiceKind = kind
-                    safeApplyVoice()
+                    voiceName = name; voiceKind = kind; safeApplyVoice()
+                    toast("Голос: ${name.substringAfterLast(":")}")
                 }
             },
-            RadialMenuView.RadialItem("Копировать", "📋") {
+            VerticalMenuView.VerticalItem("Копировать", "📋") {
                 val t = lastTr.ifBlank { lastOcr }
                 if (t.isNotBlank()) {
                     val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("ot", t))
-                    toast("Скопировано ✓")
+                    cm.setPrimaryClip(ClipData.newPlainText("ot", t)); toast("✓ Скопировано")
                 } else toast("Нет текста")
             },
-            RadialMenuView.RadialItem("История", "📋") { HistoryDialog.show(this) },
-            RadialMenuView.RadialItem("Стоп", "⏹") {
-                live = false; stopSelf()
-            },
+            VerticalMenuView.VerticalItem("История", "📋") { HistoryDialog.show(this) },
+            VerticalMenuView.VerticalItem("Стоп", "⏹") { live = false; stopSelf() },
         )
-        val menu = RadialMenuView(this, items)
-        radialMenu = menu
+        val v = VerticalMenuView(this, items)
+        menu = v
         val lp = WindowManager.LayoutParams(
-            260, 260,
+            220, (v.expandedHeight()).toInt().coerceAtLeast(100),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.END or Gravity.TOP
-        lp.x = 16; lp.y = 120
-        try { wm.addView(menu, lp) } catch (e: Exception) { Log.e(TAG, "menu addView", e) }
+        lp.x = 12; lp.y = 100
+        try { wm.addView(v, lp) } catch (e: Exception) { Log.e(TAG, "menu addView", e) }
     }
 
-    /* ─────── Region pick ─────── */
+    /* ─────── Region ─────── */
 
     private fun startRegionPick() {
         when (EnginePrefs.regionMode(this)) {
             "screen" -> {
                 region = RectF(screenW * 0.04f, screenH * 0.08f, screenW * 0.96f, screenH * 0.92f)
-                toast("Экран выбран → сканирую…")
-                handler.postDelayed({ captureThen(true, false) }, 200); return
+                toast("Экран → сканирую…"); handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200); return
             }
             "wide" -> {
                 region = RectF(screenW * 0.06f, screenH * 0.28f, screenW * 0.94f, screenH * 0.72f)
-                toast("Полоса выбрана → сканирую…")
-                handler.postDelayed({ captureThen(true, false) }, 200); return
+                toast("Полоса → сканирую…"); handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200); return
             }
         }
         if (regionView != null) return
-        radialMenu?.visibility = View.INVISIBLE
-        val rv = RegionView(this)
-        regionView = rv
+        menu?.visibility = View.INVISIBLE
+        val rv = RegionView(this); regionView = rv
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -216,37 +209,31 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             PixelFormat.TRANSLUCENT
         )
         rv.onPicked = { r ->
-            region = r
-            try { wm.removeView(rv) } catch (_: Exception) {}
-            regionView = null
-            radialMenu?.visibility = View.VISIBLE
-            toast("Область выбрана → сканирую…")
-            handler.postDelayed({ captureThen(true, false) }, 200)
+            region = r; try { wm.removeView(rv) } catch (_: Exception) {}
+            regionView = null; menu?.visibility = View.VISIBLE
+            toast("Область → сканирую…")
+            handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200)
         }
         wm.addView(rv, lp)
     }
 
-    /* ─────── Brief on-screen toast ─────── */
+    /* ─────── Toast ─────── */
 
     private fun toast(msg: String) {
         handler.post {
             val tv = TextView(this).apply {
-                text = msg
-                setTextColor(0xFFFFFFFF.toInt())
+                text = msg; setTextColor(0xFFFFFFFF.toInt())
                 setBackgroundColor(0xCC1E293B.toInt())
-                setPadding(24, 12, 24, 12)
-                textSize = 13f
+                setPadding(24, 12, 24, 12); textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
             }
             val lp = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT
             )
-            lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            lp.y = 80
+            lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; lp.y = 80
             try { wm.addView(tv, lp) } catch (_: Exception) {}
             handler.postDelayed({ try { wm.removeView(tv) } catch (_: Exception) {} }, 2000)
         }
@@ -257,7 +244,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun captureThen(ocrOnly: Boolean, livePass: Boolean) {
         val r = region ?: return
         if (!busy.compareAndSet(false, true)) return
-        radialMenu?.visibility = View.INVISIBLE
+        menu?.visibility = View.INVISIBLE
         toast("⏳ Сканирую…")
         handler.postDelayed({
             Thread {
@@ -267,26 +254,21 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         val h = PerceptualHash.of(piece)
                         if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread
                         lastHash = h
-                        val router = ocr
-                        if (router == null) { toast("OCR загружается…"); return@Thread }
+                        val router = ocr ?: run { toast("OCR загружается…"); return@Thread }
                         val engine = EnginePrefs.ocr(this)
-                        val text = router.read(piece, engine, scanLang()).trim()
+                        val lang = scanLang()
+                        val text = router.read(piece, engine, lang).trim()
                         if (text.isBlank()) { toast("(пусто)"); return@Thread }
                         if (text == lastOcr && ocrOnly) return@Thread
                         lastOcr = text; lastTr = ""
-                        toast("✓ Текст: ${text.take(40)}…")
+                        toast("✓ ${text.take(60)}")
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
-                        if (!ocrOnly) applyTranslate(text)
-                    } finally {
-                        if (!piece.isRecycled) piece.recycle()
-                    }
+                    } finally { if (!piece.isRecycled) piece.recycle() }
                 } catch (e: Exception) {
-                    Log.e(TAG, "scan error", e)
-                    toast("Ошибка: ${e.message?.take(60)}")
+                    Log.e(TAG, "scan error", e); toast("Ошибка: ${e.message?.take(60)}")
                 } finally {
-                    handler.post { radialMenu?.visibility = View.VISIBLE }
-                    busy.set(false)
+                    handler.post { menu?.visibility = View.VISIBLE }; busy.set(false)
                 }
             }.start()
         }, 140)
@@ -300,21 +282,14 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         Thread {
             try {
                 val joined = text.replace('\n', ' ')
-                val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
-                val out = if (skip) RuText.clean(text)
-                else translator?.translate(joined, EnginePrefs.tr(this)) ?: text
-                val cleaned = RuText.clean(out)
+                val cleaned = RuText.clean(translator?.translate(joined, EnginePrefs.tr(this)) ?: text)
                 lastTr = cleaned
-                toast("✓ Перевод: ${cleaned.take(40)}…")
+                toast("✓ ${cleaned.take(60)}")
                 postResultNotification(text, cleaned)
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
-                if (speak) speakNow(cleaned, false)
             } catch (e: Exception) {
-                Log.e(TAG, "translate error", e)
-                toast("Ошибка перевода: ${e.message?.take(60)}")
-            } finally {
-                translating.set(false)
-            }
+                Log.e(TAG, "translate error", e); toast("Ошибка: ${e.message?.take(60)}")
+            } finally { translating.set(false) }
         }.start()
     }
 
@@ -323,40 +298,32 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun postResultNotification(ocr: String, tr: String) {
         val nm = getSystemService(NotificationManager::class.java)
         val combined = if (tr.isNotBlank()) "$ocr\n→ $tr" else ocr
-        val openIntent = Intent(this, OverlayService::class.java).setAction(ACTION_START)
-        val pi = PendingIntent.getService(this, 0, openIntent,
+        val pi = PendingIntent.getService(this, 0,
+            Intent(this, OverlayService::class.java).setAction(ACTION_START),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, CHAN)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Результат скана")
-            .setContentText(combined.take(100))
+            .setContentTitle("Результат").setContentText(combined.take(100))
             .setStyle(Notification.BigTextStyle().bigText(combined.take(500)))
-            .setContentIntent(pi)
-            .setAutoCancel(true).setOngoing(false)
-            .build()
+            .setContentIntent(pi).setAutoCancel(true).setOngoing(false).build()
         nm.notify(RESULT_NOTIF_ID, n)
     }
 
     private fun baseNotification(text: String): Notification {
-        val stopIntent = Intent(this, OverlayService::class.java).setAction(ACTION_STOP)
-        val stopPi = PendingIntent.getService(this, 1, stopIntent,
+        val pi = PendingIntent.getService(this, 1,
+            Intent(this, OverlayService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHAN)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Overlay Translator")
-            .setContentText(text)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Стоп", stopPi)
+            .setContentTitle("Overlay Translator").setContentText(text)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Стоп", pi)
             .setOngoing(true).build()
     }
 
-    /* ─────── Voice (crash-safe) ─────── */
+    /* ─────── Voice ─────── */
 
     private fun safeApplyVoice() {
-        try {
-            tts?.let { VoiceHelper.apply(it, voiceKind, voiceName) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Voice apply failed", e)
-        }
+        try { tts?.let { VoiceHelper.apply(it, voiceKind, voiceName) } } catch (_: Exception) {}
     }
 
     private fun speakNow(text: String, force: Boolean) {
@@ -366,16 +333,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             try {
                 if (tts == null || !ttsReady) { toast("TTS не инициализирован"); return@post }
                 safeApplyVoice()
-                val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ot")
-                if (result != TextToSpeech.SUCCESS) {
-                    toast("TTS: голос недоступен")
-                } else {
-                    toast("🔊 Озвучиваю…")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "speak failed", e)
-                toast("Ошибка TTS: ${e.message?.take(40)}")
-            }
+                val r = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ot")
+                if (r == TextToSpeech.SUCCESS) toast("🔊 Озвучиваю…")
+                else toast("TTS: голос недоступен")
+            } catch (e: Exception) { Log.e(TAG, "speak", e); toast("TTS ошибка") }
         }
     }
 
@@ -384,28 +345,21 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             ttsReady = true
             tts?.language = Locale("ru", "RU")
             safeApplyVoice()
-            Log.i(TAG, "TTS ready, engine: ${tts?.defaultEngine}")
-            toast("TTS готов: ${tts?.defaultEngine ?: "без имени"}")
-        } else {
-            Log.w(TAG, "TTS init failed: $status")
-            ttsReady = false
-        }
+            toast("TTS: ${tts?.defaultEngine ?: "ok"}")
+        } else { ttsReady = false; Log.w(TAG, "TTS init: $status") }
     }
 
-    /* ─────── Screen grab ─────── */
+    /* ─────── Grab ─────── */
 
     private fun grab(r: RectF): Bitmap? {
         val img = reader?.acquireLatestImage() ?: reader?.acquireNextImage() ?: return null
         return try {
-            val plane = img.planes[0]
-            val buf = plane.buffer
-            val ps = plane.pixelStride; val rs = plane.rowStride; val pad = rs - ps * screenW
+            val p = img.planes[0]; val buf = p.buffer
+            val ps = p.pixelStride; val rs = p.rowStride; val pad = rs - ps * screenW
             val bmp = Bitmap.createBitmap(screenW + pad / ps, screenH, Bitmap.Config.ARGB_8888)
             bmp.copyPixelsFromBuffer(buf)
-            val crop = Rect(
-                r.left.toInt().coerceIn(0, screenW - 1), r.top.toInt().coerceIn(0, screenH - 1),
-                r.right.toInt().coerceIn(1, screenW), r.bottom.toInt().coerceIn(1, screenH)
-            )
+            val crop = Rect(r.left.toInt().coerceIn(0, screenW - 1), r.top.toInt().coerceIn(0, screenH - 1),
+                r.right.toInt().coerceIn(1, screenW), r.bottom.toInt().coerceIn(1, screenH))
             if (crop.width() < 8 || crop.height() < 8) { bmp.recycle(); null }
             else { val res = Bitmap.createBitmap(bmp, crop.left, crop.top, crop.width(), crop.height()); bmp.recycle(); res }
         } finally { img.close() }
@@ -413,12 +367,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
-        listOf(radialMenu, regionView).forEach { v ->
-            try { v?.let { wm.removeView(it) } } catch (_: Exception) {}
-        }
+        listOf(menu, regionView).forEach { try { it?.let { wm.removeView(it) } } catch (_: Exception) {} }
         vdisplay?.release(); reader?.close(); projection?.stop()
-        try { tts?.shutdown() } catch (_: Exception) {}
-        ocr?.close()
+        try { tts?.shutdown() } catch (_: Exception) {}; ocr?.close()
         super.onDestroy()
     }
 }
