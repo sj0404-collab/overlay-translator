@@ -17,7 +17,6 @@ import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -25,13 +24,9 @@ import android.speech.tts.TextToSpeech
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.ScrollView
-import android.widget.TextView
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -52,7 +47,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private lateinit var wm: WindowManager
     private var radialMenu: RadialMenuView? = null
-    private var resultView: View? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
     private var ocr: OcrRouter? = null
@@ -119,8 +113,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }
         return START_STICKY
     }
-
-    /* ─────── Projection ─────── */
 
     private fun scanLang() = when (EnginePrefs.scanLang(this)) {
         "EN" -> ScanLang.EN; "AUTO" -> ScanLang.BOTH; else -> ScanLang.RU
@@ -238,13 +230,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread
                         lastHash = h
                         val router = ocr
-                        if (router == null) { showText("OCR загружается…"); return@Thread }
+                        if (router == null) { notify("OCR загружается…"); return@Thread }
                         val engine = EnginePrefs.ocr(this)
                         val text = router.read(piece, engine, scanLang()).trim()
-                        if (text.isBlank()) { showText("(пусто)"); return@Thread }
+                        if (text.isBlank()) { notify("(пусто)"); return@Thread }
                         if (text == lastOcr && ocrOnly) return@Thread
                         lastOcr = text; lastTr = ""
-                        showText(text)
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
                         if (!ocrOnly) applyTranslate(text)
@@ -252,7 +243,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         if (!piece.isRecycled) piece.recycle()
                     }
                 } catch (e: Exception) {
-                    showText("Ошибка: ${e.message}")
+                    notify("Ошибка: ${e.message}")
                 } finally {
                     handler.post { radialMenu?.visibility = View.VISIBLE }
                     busy.set(false)
@@ -273,48 +264,25 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 else translator?.translate(joined, EnginePrefs.tr(this)) ?: text
                 val cleaned = RuText.clean(out)
                 lastTr = cleaned
-                showText("$text\n\n→ $cleaned")
                 postResultNotification(text, cleaned)
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
                 if (speak) speakNow(cleaned, false)
             } catch (e: Exception) {
-                showText("Ошибка перевода: ${e.message}")
+                notify("Ошибка перевода: ${e.message}")
             } finally {
                 translating.set(false)
             }
         }.start()
     }
 
-    /* ─────── Result display ─────── */
+    /* ─────── Notifications ─────── */
 
-    private fun showText(text: String) {
+    /** Short status toast via notification */
+    private fun notify(text: String) {
         handler.post {
-            if (resultView == null) {
-                resultView = LayoutInflater.from(this).inflate(R.layout.overlay_result, null)
-                val lp = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    PixelFormat.TRANSLUCENT
-                )
-                wm.addView(resultView, lp)
-            }
-            resultView?.visibility = View.VISIBLE
-            resultView?.findViewById<TextView>(R.id.srcText)?.text = text
-            resultView?.findViewById<TextView>(R.id.dstText)?.text = ""
-            resultView?.findViewById<Button>(R.id.btnHide)?.setOnClickListener {
-                resultView?.visibility = View.INVISIBLE
-            }
-            resultView?.findViewById<Button>(R.id.btnCopy)?.setOnClickListener {
-                val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("ot", text))
-            }
-            resultView?.findViewById<ScrollView>(R.id.resultScroll)
-                ?.post { resultView?.findViewById<ScrollView>(R.id.resultScroll)?.fullScroll(View.FOCUS_DOWN) }
+            postResultNotification(text, "")
         }
     }
-
-    /* ─────── Notifications ─────── */
 
     private fun postResultNotification(ocr: String, tr: String) {
         val nm = getSystemService(NotificationManager::class.java)
@@ -387,34 +355,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
-        listOf(radialMenu, resultView, regionView).forEach { v ->
+        listOf(radialMenu, regionView).forEach { v ->
             try { v?.let { wm.removeView(it) } } catch (_: Exception) {}
         }
         vdisplay?.release(); reader?.close(); projection?.stop()
         ocr?.close(); tts?.shutdown()
         super.onDestroy()
     }
-
-    private fun addDraggable(v: View, gravity: Int, x: Int, y: Int) {
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = gravity; lp.x = x; lp.y = y
-        var px = 0f; var py = 0f
-        v.setOnTouchListener { view, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> { px = e.rawX; py = e.rawY; false }
-                MotionEvent.ACTION_MOVE -> {
-                    view.translationX += e.rawX - px; view.translationY += e.rawY - py
-                    px = e.rawX; py = e.rawY; true
-                }
-                else -> false
-            }
-        }
-        try { wm.addView(v, lp) } catch (_: Exception) {}
-    }
-
 }
