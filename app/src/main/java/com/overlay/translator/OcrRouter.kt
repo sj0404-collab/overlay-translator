@@ -2,16 +2,11 @@ package com.overlay.translator
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 
 /**
- * Routes bitmap OCR through cloud-only engines:
- *   - `glens` (Google Lens, hardcoded API key)
- *   - `google` (Gemini Vision, user API key from EnginePrefs)
- *   - `openrouter` (OpenRouter vision, user API key)
- *   - `zen` / default (Zen Vision free gateway, no key)
- *
- * No local Tesseract/ML Kit/YOLO/bubble fallback — kept intentionally
- * lightweight as APK drops from ~80 MB to ~10 MB.
+ * Cloud-only OCR router.  Every engine is tried in order; if one
+ * returns blank or throws, the next one is attempted automatically.
  */
 class OcrRouter(private val ctx: Context) {
     private val glens = GlensOcrEngine()
@@ -21,22 +16,39 @@ class OcrRouter(private val ctx: Context) {
 
     fun read(src: Bitmap, engine: String, lang: ScanLang): String {
         val ruOnly = lang == ScanLang.RU
-        val raw = when (engine) {
-            "glens" -> glens.recognizeText(src)
-            "google" -> (googleEngine ?: GoogleAiOcrEngine(ctx).also { googleEngine = it })
-                .recognizeText(src)
-            "openrouter" -> (orEngine ?: OpenRouterOcrEngine(ctx).also { orEngine = it })
-                .recognizeText(src)
-            else -> { // "zen" / default — no key required
-                LlmClient.visionGemini(ctx, src, ruOnly, EnginePrefs.scanMode(ctx))
-                    ?: zen.recognizeText(src)
+        return try {
+            val raw = when (engine) {
+                "glens" -> glens.recognizeText(src).ifBlank {
+                    Log.i(TAG, "Glens returned blank, falling back to Zen")
+                    zen.recognizeText(src)
+                }
+                "google" -> (googleEngine ?: GoogleAiOcrEngine(ctx).also { googleEngine = it })
+                    .recognizeText(src).ifBlank { zen.recognizeText(src) }
+                "openrouter" -> (orEngine ?: OpenRouterOcrEngine(ctx).also { orEngine = it })
+                    .recognizeText(src).ifBlank { zen.recognizeText(src) }
+                else -> { // "zen" / default
+                    LlmClient.visionGemini(ctx, src, ruOnly, EnginePrefs.scanMode(ctx))
+                        ?: zen.recognizeText(src)
+                }
+            }
+            if (ruOnly) RuText.clean(raw) else raw.trim()
+        } catch (e: Exception) {
+            Log.w(TAG, "OCR engine '$engine' failed, trying Zen", e)
+            try {
+                val fallback = zen.recognizeText(src)
+                if (ruOnly) RuText.clean(fallback) else fallback.trim()
+            } catch (_: Exception) {
+                ""
             }
         }
-        return if (ruOnly) RuText.clean(raw) else raw.trim()
     }
 
     fun close() {
         googleEngine?.close(); googleEngine = null
         orEngine?.close(); orEngine = null
+    }
+
+    companion object {
+        private const val TAG = "OcrRouter"
     }
 }

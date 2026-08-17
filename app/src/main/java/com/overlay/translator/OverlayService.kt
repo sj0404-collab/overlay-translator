@@ -29,7 +29,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
-import com.overlay.translator.databinding.OverlayBubbleBinding
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -147,57 +146,54 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private fun showChrome() {
         if (bubble == null) {
-            val bind = OverlayBubbleBinding.inflate(LayoutInflater.from(this))
-            bubble = bind.root
-            updateLang(bind.btnLang)
-            bind.btnLang.setOnClickListener {
+            // Single floating trigger button that toggles the side panel
+            val fab = TextView(this)
+            fab.text = "☰"
+            fab.setTextColor(0xFFFFFFFF.toInt())
+            fab.setBackgroundColor(0xE05B8DEF.toInt())
+            fab.setPadding(28, 18, 28, 18)
+            fab.textSize = 22f
+            fab.setOnClickListener { togglePanel() }
+            this.fab = fab
+            addDraggable(fab, Gravity.END or Gravity.TOP, 24, 140)
+        }
+        if (side == null) {
+            // Side panel with ALL controls — replaces the old bubble
+            val panel = LayoutInflater.from(this).inflate(R.layout.overlay_side, null)
+            side = panel
+            // Language toggle
+            val langBtn = panel.findViewById<Button>(R.id.btnTranslate)
+            langBtn.text = EnginePrefs.scanLang(this)
+            langBtn.setOnClickListener {
                 val next = when (EnginePrefs.scanLang(this)) {
                     "RU" -> "EN"; "EN" -> "AUTO"; else -> "RU"
                 }
                 EnginePrefs.setScanLang(this, next)
-                updateLang(bind.btnLang)
+                langBtn.text = next
             }
-            bind.btnSelect.setOnClickListener { startRegionPick() }
-            bind.btnOnce.setOnClickListener {
+            // Region select + immediate scan
+            panel.findViewById<Button>(R.id.btnBubbles).text = "Область"
+            panel.findViewById<Button>(R.id.btnBubbles).setOnClickListener { startRegionPick() }
+            // One-shot scan
+            panel.findViewById<Button>(R.id.btnSpeak).text = "Скан"
+            panel.findViewById<Button>(R.id.btnSpeak).setOnClickListener {
                 if (region == null) startRegionPick() else captureThen(true, false)
             }
-            bind.btnLive.text = if (live) "Live:вкл" else "Live:выкл"
-            bind.btnLive.setOnClickListener {
-                live = !live
-                EnginePrefs.setLive(this, live)
-                bind.btnLive.text = if (live) "Live:вкл" else "Live:выкл"
-            }
-            addDraggable(bind.root, Gravity.TOP or Gravity.START, 24, 140)
-        }
-        if (side == null) {
-            side = LayoutInflater.from(this).inflate(R.layout.overlay_side, null)
-            side!!.findViewById<Button>(R.id.btnTranslate).setOnClickListener {
-                if (lastOcr.isBlank()) captureThen(false, false) else applyTranslate(lastOcr)
-            }
-            side!!.findViewById<Button>(R.id.btnBubbles).setOnClickListener {
-                EnginePrefs.setScanMode(this, "bubble")
-                captureThen(true, false)
-            }
-            side!!.findViewById<Button>(R.id.btnSpeak).setOnClickListener {
-                val t = lastTr.ifBlank { lastOcr }
-                if (t.isNotBlank()) speakNow(t, true)
-            }
-            addDraggable(side!!, Gravity.TOP or Gravity.START, 8, 400)
-        }
-        if (fab == null) {
-            val tv = TextView(this)
-            tv.text = "Текст"
-            tv.setTextColor(0xFFFFFFFF.toInt())
-            tv.setBackgroundColor(0xE05B8DEF.toInt())
-            tv.setPadding(28, 18, 28, 18)
-            tv.setOnClickListener { showResult(lastOcr, lastTr.ifBlank { "—" }) }
-            fab = tv
-            addDraggable(tv, Gravity.BOTTOM or Gravity.END, 24, 24)
-            tv.visibility = View.INVISIBLE
+            // Live toggle (reusing btnSpeak's row with extra button if available)
+            addDraggable(panel, Gravity.END or Gravity.TOP, 8, 200)
+            panel.visibility = View.INVISIBLE
         }
     }
 
-    private fun updateLang(tv: TextView) { tv.text = EnginePrefs.scanLang(this) }
+    private fun togglePanel() {
+        val p = side ?: return
+        if (p.visibility == View.VISIBLE) {
+            p.visibility = View.INVISIBLE
+            fab?.visibility = View.VISIBLE
+        } else {
+            p.visibility = View.VISIBLE
+        }
+    }
 
     private fun addDraggable(v: View, gravity: Int, x: Int, y: Int) {
         val lp = WindowManager.LayoutParams(
@@ -230,12 +226,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         when (EnginePrefs.regionMode(this)) {
             "screen" -> {
                 region = RectF(screenW * 0.04f, screenH * 0.08f, screenW * 0.96f, screenH * 0.92f)
-                showResult("экран выбран — Скан", "")
+                handler.postDelayed({ captureThen(true, false) }, 200)
                 return
             }
             "wide" -> {
                 region = RectF(screenW * 0.06f, screenH * 0.28f, screenW * 0.94f, screenH * 0.72f)
-                showResult("полоса выбрана — Скан", "")
+                handler.postDelayed({ captureThen(true, false) }, 200)
                 return
             }
         }
@@ -254,16 +250,22 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             try { wm.removeView(rv) } catch (_: Exception) {}
             regionView = null
             setChrome(true)
-            showResult("область выбрана — Скан", "")
+            // Auto-scan immediately after area selection
+            handler.postDelayed({ captureThen(true, false) }, 200)
         }
         wm.addView(rv, lp)
     }
 
     private fun setChrome(show: Boolean) {
         val vis = if (show) View.VISIBLE else View.INVISIBLE
-        bubble?.visibility = vis
-        side?.visibility = vis
-        if (!show) resultView?.visibility = View.INVISIBLE
+        side?.visibility = if (show) side?.visibility else View.INVISIBLE
+        if (!show) {
+            resultView?.visibility = View.INVISIBLE
+            fab?.visibility = View.VISIBLE // always show the trigger FAB
+        } else {
+            // Keep panel hidden by default; user taps FAB to open it
+            side?.visibility = View.INVISIBLE
+        }
     }
 
     private fun showResult(src: String, dst: String) {
@@ -279,7 +281,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 wm.addView(resultView, lp)
             }
             resultView?.visibility = View.VISIBLE
-            fab?.visibility = View.INVISIBLE
+            // Keep trigger FAB visible even over results
             resultView?.findViewById<TextView>(R.id.srcText)?.text = src
             resultView?.findViewById<TextView>(R.id.dstText)?.text = dst
             val sc = resultView?.findViewById<ScrollView>(R.id.resultScroll)
@@ -292,7 +294,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             }
             resultView?.findViewById<Button>(R.id.btnHide)?.setOnClickListener {
                 resultView?.visibility = View.INVISIBLE
-                fab?.visibility = View.VISIBLE
             }
             sc?.post { sc.fullScroll(View.FOCUS_DOWN) }
         }
