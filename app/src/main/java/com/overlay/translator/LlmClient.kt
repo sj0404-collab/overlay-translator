@@ -124,7 +124,7 @@ object LlmClient {
         }
         return runCatching {
             val c = (URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key").openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"; doOutput = true
+                requestMethod = "POST"; c.doOutput = true
                 connectTimeout = 8000; readTimeout = 12000
                 setRequestProperty("Content-Type", "application/json")
             }
@@ -142,7 +142,7 @@ object LlmClient {
     fun postJson(endpoint: String, bearer: String?, body: JSONObject): String? {
         return runCatching {
             val c = URL(endpoint).openConnection() as HttpURLConnection
-            c.requestMethod = "POST"; doOutput = true
+            c.requestMethod = "POST"; c.doOutput = true
             c.connectTimeout = 15000; c.readTimeout = 35000
             c.setRequestProperty("Content-Type", "application/json")
             c.setRequestProperty("HTTP-Referer", "https://github.com/sj0404-collab/overlay-translator")
@@ -176,7 +176,7 @@ object LlmClient {
                 .put("content", JSONArray()
                     .put(JSONObject().put("type", "text").put("text", prompt))
                     .put(JSONObject().put("type", "image_url")
-                        .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64")))))
+                        .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64"))))
     }
 
     private fun ocrPrompt(russianOnly: Boolean, scanMode: String): String {

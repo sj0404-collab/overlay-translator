@@ -3,10 +3,10 @@ package com.overlay.translator
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 import java.util.Locale
 
 object VoiceDialog {
@@ -14,7 +14,6 @@ object VoiceDialog {
 
     fun show(ctx: Context, wm: WindowManager, currentVoice: String?, onSelect: (String, VoiceKind) -> Unit) {
         var tts: TextToSpeech? = null
-        var ready = false
 
         tts = TextToSpeech(ctx) { status ->
             if (status != TextToSpeech.SUCCESS) {
@@ -23,7 +22,6 @@ object VoiceDialog {
                 }
                 return@TextToSpeech
             }
-            ready = true
             tts?.language = Locale("ru", "RU")
             val voices = VoiceHelper.russianVoices(tts)
             if (voices.isEmpty()) {
@@ -44,17 +42,23 @@ object VoiceDialog {
                 val kind = VoiceHelper.classify(v)
                 val net = if (v.isNetworkConnectionRequired) "☁" else "📱"
                 val label = "$net  ${v.name.substringAfterLast(":")} · ${kind.name}"
-                val tv = DialogOverlay.item(ctx, "○  $label").apply {
-                    setOnClickListener {
-                        itemsList.forEachIndexed { idx, tt ->
-                            tt.text = if (idx == i) "● $label".let { label_text ->
-                                label_text.replace("○", "●")
-                            } else {
-                                tt.text.toString().replace("●", "○")
-                            }
+                val prefix = if (i == selectedIndex) "●" else "○"
+                val tv = DialogOverlay.item(ctx, "$prefix  $label")
+                tv.setOnClickListener {
+                    val newPrefix = if (itemsList.indexOf(tv) == selectedIndex) "●" else "○"
+                    tv.text = "$newPrefix  $label"
+                    itemsList.forEachIndexed { idx, other ->
+                        if (other !== tv) {
+                            val otherPrefix = if (idx == selectedIndex) "○" else ""
+                            // safe: itemsList indexes match voices indexes
+                            val cur = if (idx == itemsList.indexOf(tv)) "○" else otherPrefix
+                            val v2 = voices[idx]
+                            val net2 = if (v2.isNetworkConnectionRequired) "☁" else "📱"
+                            val lbl2 = "$net2  ${v2.name.substringAfterLast(":")} · ${VoiceHelper.classify(v2).name}"
+                            other.text = "$cur  $lbl2"
                         }
-                        selectedIndex = i
                     }
+                    selectedIndex = itemsList.indexOf(tv)
                 }
                 container.addView(tv)
                 itemsList.add(tv)
@@ -100,9 +104,6 @@ object VoiceDialog {
             btnRow.addView(btnClose)
             container.addView(DialogOverlay.divider(ctx))
             container.addView(btnRow)
-
-            // Highlight default selection
-            itemsList.getOrNull(selectedIndex)?.performClick()
 
             DialogOverlay.show(ctx, wm, container)
         }

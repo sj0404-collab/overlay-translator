@@ -46,6 +46,9 @@ object EnginePrefs {
     fun speak(ctx: Context) = sp(ctx).getBoolean("speak", true)
     fun setSpeak(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("speak", v).apply()
 
+    fun autoTranslate(ctx: Context) = sp(ctx).getBoolean("auto_translate", false)
+    fun setAutoTranslate(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("auto_translate", v).apply()
+
     /* ────────────── Scan options ────────────── */
     fun scanLang(ctx: Context) = sp(ctx).getString("slang", "AUTO") ?: "AUTO"
     fun setScanLang(ctx: Context, v: String) = sp(ctx).edit().putString("slang", v).apply()

@@ -173,21 +173,23 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             },
             VerticalMenuView.VerticalItem("Озвучить", "🔊") {
                 try {
-                    if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
-                    val t = lastTr.ifBlank { lastOcr }
-                    if (t.isNotBlank()) speakNow(t, true)
-                    else toast("Нет текста")
+                    if (ttsReady) {
+                        val t = lastTr.ifBlank { lastOcr }
+                        if (t.isNotBlank()) speakNow(t, true)
+                        else toast("Нет текста")
+                    } else toast("TTS не готов")
                 } catch (e: Exception) {
                     Log.e(TAG, "voice err", e); toast("Ошибка TTS")
                 }
             },
             VerticalMenuView.VerticalItem("Выбор голоса", "🗣") {
                 try {
-                    if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
-                    VoiceDialog.show(this, wm, voiceName) { name, kind ->
-                        voiceName = name; voiceKind = kind; safeApplyVoice()
-                        toast("Голос: ${name.substringAfterLast(":")}")
-                    }
+                    if (ttsReady) {
+                        VoiceDialog.show(this, wm, voiceName) { name, kind ->
+                            voiceName = name; voiceKind = kind; safeApplyVoice()
+                            toast("Голос: ${name.substringAfterLast(":")}")
+                        }
+                    } else toast("TTS не готов")
                 } catch (e: Exception) {
                     Log.e(TAG, "VoiceDialog err", e); toast("Ошибка диалога")
                 }
