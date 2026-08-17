@@ -151,17 +151,19 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 live = !live; EnginePrefs.setLive(this, live); toast(if (live) "Live: вкл" else "Live: выкл")
             },
             VerticalMenuView.VerticalItem("Озвучить", "🔊") {
-                if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
-                val t = lastTr.ifBlank { lastOcr }
-                if (t.isNotBlank()) speakNow(t, true)
-                else toast("Нет текста для озвучки")
+                if (ttsReady) {
+                    val t = lastTr.ifBlank { lastOcr }
+                    if (t.isNotBlank()) speakNow(t, true)
+                    else toast("Нет текста для озвучки")
+                } else toast("TTS не готов")
             },
             VerticalMenuView.VerticalItem("Выбор голоса", "🗣") {
-                if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
-                VoiceDialog.show(this, voiceName) { name, kind ->
-                    voiceName = name; voiceKind = kind; safeApplyVoice()
-                    toast("Голос: ${name.substringAfterLast(":")}")
-                }
+                if (ttsReady) {
+                    VoiceDialog.show(this, voiceName) { name, kind ->
+                        voiceName = name; voiceKind = kind; safeApplyVoice()
+                        toast("Голос: ${name.substringAfterLast(":")}")
+                    }
+                } else toast("TTS не готов")
             },
             VerticalMenuView.VerticalItem("Копировать", "📋") {
                 val t = lastTr.ifBlank { lastOcr }
