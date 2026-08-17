@@ -33,7 +33,7 @@ class Translator(private val ctx: Context) {
                     ?: MangaTranslatorService.translate(cleaned)
                     ?: mymemory(cleaned)
             }
-        }.let { RuText.clean(it) }
+        }.let { RuText.clean(it ?: "") }
     }
 
     @Suppress("SameParameterValue")
