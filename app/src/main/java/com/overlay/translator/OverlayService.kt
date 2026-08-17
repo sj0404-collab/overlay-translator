@@ -25,7 +25,6 @@ import android.speech.tts.TextToSpeech
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
@@ -57,6 +56,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var voiceKind = VoiceKind.FEMALE
     private var voiceName: String? = null
     private var region: RectF? = null
+    private var regionPreset = "rect" // rect | screen | wide | bottom
+    private var autoTranslate = false
     private var lastOcr = ""
     private var lastTr = ""
     private var lastHash = 0L
@@ -72,7 +73,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private val tick = object : Runnable {
         override fun run() {
-            if (live && region != null && !busy.get()) captureThen(ocrOnly = true, livePass = true)
+            if (live && region != null && !busy.get()) captureThen(ocrOnly = !autoTranslate, livePass = true)
             handler.postDelayed(this, 5200)
         }
     }
@@ -99,6 +100,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
                 live = EnginePrefs.live(this)
+                autoTranslate = EnginePrefs.autoTranslate(this)
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
                 voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
@@ -134,36 +136,61 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         )
     }
 
+    /** Picks the current region based on the selected preset. */
+    private fun applyRegionPreset(): RectF = when (EnginePrefs.regionMode(this)) {
+        "screen" -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat())
+        "wide" -> RectF(0f, screenH * 0.30f, screenW.toFloat(), screenH * 0.70f)
+        "bottom" -> RectF(0f, screenH * 0.55f, screenW.toFloat(), screenH * 0.92f)
+        else -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat()) // rect default fallback
+    }
+
     /* ─────── Vertical menu ─────── */
 
     private fun showMenu() {
         if (menu != null) return
+        regionPreset = EnginePrefs.regionMode(this)
         val items = listOf(
-            VerticalMenuView.VerticalItem("Скан", "🔍") {
-                if (region == null) startRegionPick() else captureThen(ocrOnly = true, livePass = false)
+            VerticalMenuView.VerticalItem("Скан (${regionLabel(regionPreset)})", "🔍") {
+                if (regionPreset == "rect") {
+                    if (region == null) startRegionPick() else captureThen(ocrOnly = !autoTranslate)
+                } else {
+                    region = applyRegionPreset()
+                    captureThen(ocrOnly = !autoTranslate)
+                }
             },
             VerticalMenuView.VerticalItem("Область", "⬚") { startRegionPick() },
-            VerticalMenuView.VerticalItem("Перевести", "🌐") {
+            VerticalMenuView.VerticalItem(
+                "Зона: ${regionLabel(regionPreset)}", "📐"
+            ) { cycleRegionPreset() },
+            VerticalMenuView.VerticalItem("Перевод", "🌐") {
                 if (lastOcr.isNotBlank()) applyTranslate(lastOcr)
-                else toast("Сначала сделайте скан")
+                else toast("Сначала скан")
             },
-            VerticalMenuView.VerticalItem("Live", if (live) "🟢" else "⚪") {
-                live = !live; EnginePrefs.setLive(this, live); toast(if (live) "Live: вкл" else "Live: выкл")
+            VerticalMenuView.VerticalItem("Live + Перевод", if (autoTranslate) "🟢" else "⚪") {
+                autoTranslate = !autoTranslate
+                EnginePrefs.setAutoTranslate(this, autoTranslate)
+                toast(if (autoTranslate) "Live перевод: вкл" else "Live перевод: выкл")
             },
             VerticalMenuView.VerticalItem("Озвучить", "🔊") {
-                if (ttsReady) {
+                try {
+                    if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
                     val t = lastTr.ifBlank { lastOcr }
                     if (t.isNotBlank()) speakNow(t, true)
-                    else toast("Нет текста для озвучки")
-                } else toast("TTS не готов")
+                    else toast("Нет текста")
+                } catch (e: Exception) {
+                    Log.e(TAG, "voice err", e); toast("Ошибка TTS")
+                }
             },
             VerticalMenuView.VerticalItem("Выбор голоса", "🗣") {
-                if (ttsReady) {
-                    VoiceDialog.show(this, voiceName) { name, kind ->
+                try {
+                    if (!ttsReady) { toast("TTS не готов"); return@VerticalMenu }
+                    VoiceDialog.show(this, wm, voiceName) { name, kind ->
                         voiceName = name; voiceKind = kind; safeApplyVoice()
                         toast("Голос: ${name.substringAfterLast(":")}")
                     }
-                } else toast("TTS не готов")
+                } catch (e: Exception) {
+                    Log.e(TAG, "VoiceDialog err", e); toast("Ошибка диалога")
+                }
             },
             VerticalMenuView.VerticalItem("Копировать", "📋") {
                 val t = lastTr.ifBlank { lastOcr }
@@ -172,13 +199,15 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     cm.setPrimaryClip(ClipData.newPlainText("ot", t)); toast("✓ Скопировано")
                 } else toast("Нет текста")
             },
-            VerticalMenuView.VerticalItem("История", "📋") { HistoryDialog.show(this) },
+            VerticalMenuView.VerticalItem("История", "📋") {
+                try { HistoryDialog.show(this, wm) } catch (e: Exception) { Log.e(TAG, "hist err", e) }
+            },
             VerticalMenuView.VerticalItem("Стоп", "⏹") { live = false; stopSelf() },
         )
         val v = VerticalMenuView(this, items)
         menu = v
         val lp = WindowManager.LayoutParams(
-            220, (v.expandedHeight()).toInt().coerceAtLeast(100),
+            240, (v.expandedHeight()).toInt().coerceAtLeast(100),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -188,19 +217,23 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         try { wm.addView(v, lp) } catch (e: Exception) { Log.e(TAG, "menu addView", e) }
     }
 
+    private fun regionLabel(p: String) = when (p) {
+        "rect" -> "область"; "screen" -> "экран"; "wide" -> "полоса"; "bottom" -> "низ"
+        else -> p
+    }
+
+    private fun cycleRegionPreset() {
+        val presets = listOf("rect", "screen", "wide", "bottom")
+        val i = presets.indexOf(regionPreset).coerceAtLeast(0)
+        regionPreset = presets[(i + 1) % presets.size]
+        EnginePrefs.setRegionMode(this, regionPreset)
+        region = null // reset manual region
+        toast("Зона: ${regionLabel(regionPreset)}")
+    }
+
     /* ─────── Region ─────── */
 
     private fun startRegionPick() {
-        when (EnginePrefs.regionMode(this)) {
-            "screen" -> {
-                region = RectF(screenW * 0.04f, screenH * 0.08f, screenW * 0.96f, screenH * 0.92f)
-                toast("Экран → сканирую…"); handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200); return
-            }
-            "wide" -> {
-                region = RectF(screenW * 0.06f, screenH * 0.28f, screenW * 0.94f, screenH * 0.72f)
-                toast("Полоса → сканирую…"); handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200); return
-            }
-        }
         if (regionView != null) return
         menu?.visibility = View.INVISIBLE
         val rv = RegionView(this); regionView = rv
@@ -211,10 +244,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             PixelFormat.TRANSLUCENT
         )
         rv.onPicked = { r ->
-            region = r; try { wm.removeView(rv) } catch (_: Exception) {}
+            region = r; regionPreset = "rect"
+            EnginePrefs.setRegionMode(this, "rect")
+            try { wm.removeView(rv) } catch (_: Exception) {}
             regionView = null; menu?.visibility = View.VISIBLE
-            toast("Область → сканирую…")
-            handler.postDelayed({ captureThen(ocrOnly = true, livePass = false) }, 200)
+            toast("Область выбрана")
+            captureThen(ocrOnly = !autoTranslate)
         }
         wm.addView(rv, lp)
     }
@@ -243,11 +278,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     /* ─────── Scan ─────── */
 
-    private fun captureThen(ocrOnly: Boolean, livePass: Boolean) {
-        val r = region ?: return
+    private fun captureThen(ocrOnly: Boolean, livePass: Boolean = false) {
+        val r = region ?: applyRegionPreset().also { region = it }
         if (!busy.compareAndSet(false, true)) return
         menu?.visibility = View.INVISIBLE
-        toast("⏳ Сканирую…")
+        if (!livePass) toast("⏳ Сканирую…")
         handler.postDelayed({
             Thread {
                 try {
@@ -260,15 +295,16 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         val engine = EnginePrefs.ocr(this)
                         val lang = scanLang()
                         val text = router.read(piece, engine, lang).trim()
-                        if (text.isBlank()) { toast("(пусто)"); return@Thread }
+                        if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
                         if (text == lastOcr && ocrOnly) return@Thread
                         lastOcr = text; lastTr = ""
-                        toast("✓ ${text.take(60)}")
+                        if (!livePass) toast("✓ ${text.take(60)}")
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
+                        if (!ocrOnly) applyTranslate(text)
                     } finally { if (!piece.isRecycled) piece.recycle() }
                 } catch (e: Exception) {
-                    Log.e(TAG, "scan error", e); toast("Ошибка: ${e.message?.take(60)}")
+                    Log.e(TAG, "scan error", e); if (!livePass) toast("Ошибка: ${e.message?.take(50)}")
                 } finally {
                     handler.post { menu?.visibility = View.VISIBLE }; busy.set(false)
                 }
@@ -289,10 +325,46 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 toast("✓ ${cleaned.take(60)}")
                 postResultNotification(text, cleaned)
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
+                // Try speaker detection (best-effort, async)
+                Thread {
+                    val speaker = try { LlmClient.detectSpeaker(ctx = this, text = text) }
+                                ?: VoiceKind.FEMALE
+                    handler.post { applyVoiceForSpeaker(speaker) }
+                }.start()
             } catch (e: Exception) {
-                Log.e(TAG, "translate error", e); toast("Ошибка: ${e.message?.take(60)}")
+                Log.e(TAG, "translate error", e); toast("Ошибка: ${e.message?.take(50)}")
             } finally { translating.set(false) }
         }.start()
+    }
+
+    /** Pick voice/pitch based on detected speaker. */
+    private fun applyVoiceForSpeaker(speaker: VoiceKind) {
+        if (tts == null || !ttsReady) return
+        try {
+            when (speaker) {
+                VoiceKind.MALE -> {
+                    voiceKind = VoiceKind.MALE
+                    safeApplyVoice()
+                    tts?.setPitch(0.95f)
+                }
+                VoiceKind.FEMALE -> {
+                    voiceKind = VoiceKind.FEMALE
+                    safeApplyVoice()
+                    tts?.setPitch(1.0f)
+                }
+                VoiceKind.TEEN -> {
+                    voiceKind = VoiceKind.FEMALE
+                    safeApplyVoice()
+                    tts?.setPitch(1.25f)
+                }
+                else -> {
+                    voiceKind = VoiceKind.FEMALE
+                    safeApplyVoice()
+                    tts?.setPitch(0.92f) // narration tone
+                }
+            }
+        } catch (e: Exception) { Log.w(TAG, "voice apply", e) }
+        tts?.setSpeechRate(0.96f)
     }
 
     /* ─────── Notifications ─────── */
@@ -369,6 +441,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        DialogOverlay.dismiss()
         listOf(menu, regionView).forEach { try { it?.let { wm.removeView(it) } } catch (_: Exception) {} }
         vdisplay?.release(); reader?.close(); projection?.stop()
         try { tts?.shutdown() } catch (_: Exception) {}; ocr?.close()

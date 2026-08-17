@@ -9,14 +9,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Minimal LLM-vision client. Aggregates the three endpoints required by the
- * Yomihon reader stack:
- *   - Zen Vision  (free cloud gateway, no key)
- *   - OpenRouter  (requires user API key in [EnginePrefs])
- *   - Google AI   (Gemini Vision, requires user API key in [EnginePrefs])
- *
- * Each helper posts a multimodal Chat-Completions-style payload with one
- * PNG image and one text prompt.
+ * Minimal LLM-vision client. Three endpoints: Zen Vision (free, no key),
+ * OpenRouter (user key), Google AI / Gemini Vision (user key). Also has
+ * non-vision helpers: Zen translation, OpenRouter translation, Gemini
+ * translation, and [detectSpeaker] for automatic voice selection.
  */
 object LlmClient {
     val ZEN_FREE = listOf(
@@ -61,14 +57,13 @@ object LlmClient {
         val key = EnginePrefs.googleApiKey(ctx)
         if (key.isBlank()) return null
         val model = EnginePrefs.googleModel(ctx).ifBlank { GEMINI_FREE.first() }
-        val mimeIn = "image/png"
         val base64 = toJpegB64(bmp, 1024)
         val body = JSONObject().apply {
             put("contents", JSONArray().put(JSONObject().apply {
                 put("parts", JSONArray().apply {
                     put(JSONObject().put("text", ocrPrompt(russianOnly, scanMode)))
                     put(JSONObject().put("inline_data", JSONObject().apply {
-                        put("mime_type", mimeIn)
+                        put("mime_type", "image/png")
                         put("data", base64)
                     }))
                 })
@@ -86,20 +81,14 @@ object LlmClient {
         val prompt = "Переведи реплику комикса на естественный русский.\n" +
             "Пиши ТОЛЬКО кириллицей. Не оставляй английских слов (кроме имён).\n" +
             "Без кавычек и пояснений.\n\nТекст:\n$text"
-        return chat(
-            "https://opencode.ai/zen/v1/chat/completions", null,
-            model, prompt, tokensFor(words),
-        )
+        return chat("https://opencode.ai/zen/v1/chat/completions", null, model, prompt, tokensFor(words))
     }
 
     fun translateOpenRouter(text: String, key: String, model: String): String? {
         if (key.isBlank()) return null
         val words = text.split(Regex("\\s+")).size
         val prompt = "Переведи на русский (только кириллица, без латиницы). Только перевод:\n$text"
-        return chat(
-            "https://openrouter.ai/api/v1/chat/completions", "Bearer $key",
-            model, prompt, tokensFor(words),
-        )
+        return chat("https://openrouter.ai/api/v1/chat/completions", "Bearer $key", model, prompt, tokensFor(words))
     }
 
     fun translateGemini(ctx: android.content.Context, text: String): String? {
@@ -120,13 +109,41 @@ object LlmClient {
         )
     }
 
+    /** Ask the LLM who speaks this dialogue (MALE/FEMALE/NARRATOR/TEEN). */
+    fun detectSpeaker(ctx: android.content.Context, text: String): VoiceKind? {
+        val key = EnginePrefs.googleApiKey(ctx)
+        if (key.isBlank()) return null
+        val model = EnginePrefs.googleModel(ctx).ifBlank { GEMINI_FREE.first() }
+        val prompt = "Look at this dialogue / caption text and return the speaker's gender as a single word: " +
+            "MALE, FEMALE, TEEN, or NARRATOR. Just return the word, nothing else.\n\nText:\n$text"
+        val body = JSONObject().apply {
+            put("contents", JSONArray().put(JSONObject().apply {
+                put("parts", JSONArray().put(JSONObject().put("text", prompt)))
+            }))
+            put("generationConfig", JSONObject().put("temperature", 0.0))
+        }
+        return runCatching {
+            val c = (URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true
+                connectTimeout = 8000; readTimeout = 12000
+                setRequestProperty("Content-Type", "application/json")
+            }
+            c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val raw = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
+            c.disconnect()
+            val word = JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)
+                ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)?.optString("text", "")
+                ?.trim()?.split(" ")?.firstOrNull()?.uppercase() ?: return@runCatching null
+            when (word) { "MALE" -> VoiceKind.MALE; "FEMALE" -> VoiceKind.FEMALE;
+                "TEEN" -> VoiceKind.TEEN; else -> VoiceKind.OTHER }
+        }.getOrNull()
+    }
+
     fun postJson(endpoint: String, bearer: String?, body: JSONObject): String? {
         return runCatching {
             val c = URL(endpoint).openConnection() as HttpURLConnection
-            c.requestMethod = "POST"
-            c.doOutput = true
-            c.connectTimeout = 15000
-            c.readTimeout = 35000
+            c.requestMethod = "POST"; doOutput = true
+            c.connectTimeout = 15000; c.readTimeout = 35000
             c.setRequestProperty("Content-Type", "application/json")
             c.setRequestProperty("HTTP-Referer", "https://github.com/sj0404-collab/overlay-translator")
             c.setRequestProperty("X-Title", "OverlayTranslator")
@@ -147,25 +164,19 @@ object LlmClient {
     /* ───────────────── helpers ───────────────── */
 
     private fun chat(endpoint: String, bearer: String?, model: String, prompt: String, maxTok: Int): String? {
-        val body = JSONObject()
-            .put("model", model)
-            .put("max_tokens", maxTok)
+        val body = JSONObject().put("model", model).put("max_tokens", maxTok)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
         return postJson(endpoint, bearer, body)
     }
 
     private fun visionBody(model: String, bmp: Bitmap, prompt: String, maxTok: Int, maxSide: Int): JSONObject {
         val b64 = toJpegB64(bmp, maxSide)
-        return JSONObject()
-            .put("model", model)
-            .put("max_tokens", maxTok)
-            .put("messages", JSONArray().put(JSONObject()
-                .put("role", "user")
+        return JSONObject().put("model", model).put("max_tokens", maxTok)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user")
                 .put("content", JSONArray()
                     .put(JSONObject().put("type", "text").put("text", prompt))
                     .put(JSONObject().put("type", "image_url")
-                        .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64")))
-                )))
+                        .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64")))))
     }
 
     private fun ocrPrompt(russianOnly: Boolean, scanMode: String): String {
@@ -189,12 +200,9 @@ object LlmClient {
         val m = maxOf(bmp.width, bmp.height)
         val scaled = if (m > maxSide) {
             val s = maxSide.toFloat() / m
-            Bitmap.createScaledBitmap(
-                bmp,
+            Bitmap.createScaledBitmap(bmp,
                 (bmp.width * s).toInt().coerceAtLeast(32),
-                (bmp.height * s).toInt().coerceAtLeast(32),
-                true,
-            )
+                (bmp.height * s).toInt().coerceAtLeast(32), true)
         } else bmp
         val os = ByteArrayOutputStream()
         scaled.compress(Bitmap.CompressFormat.JPEG, 62, os)

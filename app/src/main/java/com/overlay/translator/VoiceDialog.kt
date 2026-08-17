@@ -1,83 +1,126 @@
 package com.overlay.translator
 
-import android.app.AlertDialog
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.LinearLayout
 import java.util.Locale
 
 object VoiceDialog {
     private const val TAG = "VoiceDialog"
 
-    fun show(ctx: Context, currentVoice: String?, onSelect: (String, VoiceKind) -> Unit) {
+    fun show(ctx: Context, wm: WindowManager, currentVoice: String?, onSelect: (String, VoiceKind) -> Unit) {
         var tts: TextToSpeech? = null
         var ready = false
 
         tts = TextToSpeech(ctx) { status ->
             if (status != TextToSpeech.SUCCESS) {
-                Log.w(TAG, "TTS init failed: $status")
-                try {
-                    AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog)
-                        .setTitle("TTS не найден")
-                        .setMessage("Установите Google TTS, RHVoice или Sherpa-ONNX из Play Store")
-                        .setPositiveButton("OK", null).show()
-                } catch (_: Exception) {}
+                showSimpleDialog(ctx, wm, "TTS не найден", "Установите Google TTS, RHVoice, Sherpa-ONNX") {
+                    try { tts?.shutdown() } catch (_: Exception) {}
+                }
                 return@TextToSpeech
             }
             ready = true
             tts?.language = Locale("ru", "RU")
             val voices = VoiceHelper.russianVoices(tts)
             if (voices.isEmpty()) {
-                try {
-                    AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog)
-                        .setTitle("Нет русских голосов")
-                        .setMessage("Установите движок TTS с русскими голосами")
-                        .setPositiveButton("OK", null).show()
-                } catch (_: Exception) {}
-                tts?.shutdown()
+                showSimpleDialog(ctx, wm, "Нет русских голосов", "Установите движок TTS с русскими голосами") {
+                    try { tts?.shutdown() } catch (_: Exception) {}
+                }
                 return@TextToSpeech
             }
 
-            val labels = voices.map { v ->
+            val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            container.addView(DialogOverlay.title(ctx, "🗣 Выбор голоса"))
+
+            var selectedIndex = voices.indexOfFirst { it.name == currentVoice }.coerceAtLeast(0)
+            val itemsList = mutableListOf<TextView>()
+
+            for (i in voices.indices) {
+                val v = voices[i]
                 val kind = VoiceHelper.classify(v)
                 val net = if (v.isNetworkConnectionRequired) "☁" else "📱"
-                "$net ${v.name.substringAfterLast(":")} [${kind.name}]"
-            }.toTypedArray()
-
-            val checked = voices.indexOfFirst { it.name == currentVoice }.coerceAtLeast(0)
-
-            try {
-                AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog)
-                    .setTitle("🗣 Выбор голоса")
-                    .setSingleChoiceItems(labels, checked) { _, _ -> }
-                    .setPositiveButton("Выбрать") { d, _ ->
-                        val pos = (d as AlertDialog).listView?.checkedItemPosition ?: 0
-                        if (pos >= 0 && pos < voices.size) {
-                            val v = voices[pos]
-                            try {
-                                tts?.voice = v
-                                tts?.speak("Голос выбран", TextToSpeech.QUEUE_FLUSH, null, "sel")
-                            } catch (e: Exception) { Log.w(TAG, "test speak failed", e) }
-                            onSelect(v.name, VoiceHelper.classify(v))
+                val label = "$net  ${v.name.substringAfterLast(":")} · ${kind.name}"
+                val tv = DialogOverlay.item(ctx, "○  $label").apply {
+                    setOnClickListener {
+                        itemsList.forEachIndexed { idx, tt ->
+                            tt.text = if (idx == i) "● $label".let { label_text ->
+                                label_text.replace("○", "●")
+                            } else {
+                                tt.text.toString().replace("●", "○")
+                            }
                         }
-                        try { tts?.shutdown() } catch (_: Exception) {}
+                        selectedIndex = i
                     }
-                    .setNegativeButton("Отмена") { _, _ -> try { tts?.shutdown() } catch (_: Exception) {} }
-                    .setNeutralButton("Прослушать") { d, _ ->
-                        val pos = (d as AlertDialog).listView?.checkedItemPosition ?: 0
-                        if (pos >= 0 && pos < voices.size) {
-                            try {
-                                tts?.voice = voices[pos]
-                                tts?.speak("Проверка голоса. Привет, это тест.", TextToSpeech.QUEUE_FLUSH, null, "preview")
-                            } catch (e: Exception) { Log.w(TAG, "preview failed", e) }
-                        }
-                    }
-                    .setOnDismissListener { try { tts?.shutdown() } catch (_: Exception) {} }
-                    .show()
-            } catch (e: Exception) {
-                Log.e(TAG, "dialog failed", e)
-                try { tts?.shutdown() } catch (_: Exception) {}
+                }
+                container.addView(tv)
+                itemsList.add(tv)
+            }
+
+            // Buttons
+            val btnRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 16, 0, 0)
+            }
+            val btnTest = Button(ctx).apply {
+                text = "▶ Прослушать"
+                setOnClickListener {
+                    val v = voices.getOrNull(selectedIndex) ?: return@setOnClickListener
+                    try {
+                        tts?.voice = v
+                        tts?.speak("Проверка голоса. Привет.", TextToSpeech.QUEUE_FLUSH, null, "preview")
+                    } catch (e: Exception) { Log.w(TAG, "test failed", e) }
+                }
+            }
+            val btnOk = Button(ctx).apply {
+                text = "✓ Выбрать"
+                setOnClickListener {
+                    val v = voices.getOrNull(selectedIndex) ?: return@setOnClickListener
+                    try {
+                        tts?.voice = v
+                        tts?.speak("Голос выбран", TextToSpeech.QUEUE_FLUSH, null, "sel")
+                    } catch (_: Exception) {}
+                    onSelect(v.name, VoiceHelper.classify(v))
+                    DialogOverlay.dismiss()
+                    try { tts?.shutdown() } catch (_: Exception) {}
+                }
+            }
+            val btnClose = Button(ctx).apply {
+                text = "✕"
+                setOnClickListener {
+                    DialogOverlay.dismiss()
+                    try { tts?.shutdown() } catch (_: Exception) {}
+                }
+            }
+            btnRow.addView(btnTest)
+            btnRow.addView(btnOk)
+            btnRow.addView(btnClose)
+            container.addView(DialogOverlay.divider(ctx))
+            container.addView(btnRow)
+
+            // Highlight default selection
+            itemsList.getOrNull(selectedIndex)?.performClick()
+
+            DialogOverlay.show(ctx, wm, container)
+        }
+    }
+
+    private fun showSimpleDialog(ctx: Context, wm: WindowManager, title: String, msg: String, onDismiss: () -> Unit) {
+        val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        container.addView(DialogOverlay.title(ctx, title))
+        container.addView(DialogOverlay.item(ctx, msg))
+        val btn = Button(ctx).apply {
+            text = "OK"
+            setOnClickListener {
+                DialogOverlay.dismiss()
+                onDismiss()
             }
         }
+        container.addView(DialogOverlay.divider(ctx))
+        container.addView(btn)
+        DialogOverlay.show(ctx, wm, container)
     }
 }
