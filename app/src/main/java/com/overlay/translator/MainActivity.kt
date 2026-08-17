@@ -95,31 +95,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireOcr(b: TabOcrBinding) {
-        // Block temporarily so setChecked() doesn't fire onCheckedChange while restoring.
         b.ocrGroup.setOnCheckedChangeListener(null)
-        b.langGroup.setOnCheckedChangeListener(null)
-        b.scanModeGroup.setOnCheckedChangeListener(null)
         b.regionModeGroup.setOnCheckedChangeListener(null)
 
         when (EnginePrefs.ocr(this)) {
             "openrouter" -> b.ocrOr.isChecked = true
             "glens" -> b.ocrGlens.isChecked = true
             "google" -> b.ocrGoogle.isChecked = true
-            "yolo" -> b.ocrYolo.isChecked = true
-            "mlkit" -> b.ocrMlkit.isChecked = true
-            "tess" -> b.ocrTess.isChecked = true
-            "local" -> b.ocrLocal.isChecked = true
             else -> b.ocrZen.isChecked = true
-        }
-        when (EnginePrefs.scanLang(this)) {
-            "EN" -> b.langEn.isChecked = true
-            "AUTO" -> b.langAuto.isChecked = true
-            else -> b.langRu.isChecked = true
-        }
-        when (EnginePrefs.scanMode(this)) {
-            "bubble" -> b.scanBubble.isChecked = true
-            "full" -> b.scanFull.isChecked = true
-            else -> b.scanRect.isChecked = true
         }
         when (EnginePrefs.regionMode(this)) {
             "wide" -> b.regWide.isChecked = true
@@ -127,7 +110,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             else -> b.regRect.isChecked = true
         }
 
-        // Google AI model + key
         b.googleModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.GEMINI_FREE)
         b.googleModel.setSelection(LlmClient.GEMINI_FREE.indexOf(EnginePrefs.googleModel(this)).coerceAtLeast(0))
         b.googleModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
@@ -146,25 +128,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 b.ocrOr.id -> "openrouter"
                 b.ocrGlens.id -> "glens"
                 b.ocrGoogle.id -> "google"
-                b.ocrYolo.id -> "yolo"
-                b.ocrMlkit.id -> "mlkit"
-                b.ocrTess.id -> "tess"
-                b.ocrLocal.id -> "local"
                 else -> "zen"
-            })
-        }
-        b.langGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setScanLang(this, when (id) {
-                b.langEn.id -> "EN"
-                b.langAuto.id -> "AUTO"
-                else -> "RU"
-            })
-        }
-        b.scanModeGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setScanMode(this, when (id) {
-                b.scanBubble.id -> "bubble"
-                b.scanFull.id -> "full"
-                else -> "rect"
             })
         }
         b.regionModeGroup.setOnCheckedChangeListener { _, id ->
@@ -182,7 +146,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         when (EnginePrefs.tr(this)) {
             "google" -> b.trGoogle.isChecked = true
             "openrouter" -> b.trOr.isChecked = true
-            "local" -> b.trLocal.isChecked = true
             "mymemory" -> b.trMymemory.isChecked = true
             "auto" -> b.trAuto.isChecked = true
             "googleai" -> b.trGoogleAi.isChecked = true
@@ -193,7 +156,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 b.trGoogle.id -> "google"
                 b.trGoogleAi.id -> "googleai"
                 b.trOr.id -> "openrouter"
-                b.trLocal.id -> "local"
                 b.trMymemory.id -> "mymemory"
                 b.trAuto.id -> "auto"
                 else -> "zen"

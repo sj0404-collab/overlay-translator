@@ -53,7 +53,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var ocr: OcrRouter? = null
     private var translator: Translator? = null
-    private var phrases: PhraseBank? = null
     private var live = false
     private var speak = true
     private var voiceKind = VoiceKind.FEMALE
@@ -99,7 +98,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         Thread {
             ocr = OcrRouter(this)
             translator = Translator(this)
-            phrases = PhraseBank(this)
         }.start()
     }
 
@@ -344,10 +342,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             try {
                 val joined = text.replace('\n', ' ')
                 val skip = scanLang() == ScanLang.RU || ScriptDetect.preferRu(joined)
-                val known = phrases?.ruOf(joined)
                 var out = when {
                     skip -> RuText.clean(text)
-                    known != null -> known
                     else -> translator?.translate(joined, EnginePrefs.tr(this)) ?: text
                 }
                 out = RuText.clean(out)
