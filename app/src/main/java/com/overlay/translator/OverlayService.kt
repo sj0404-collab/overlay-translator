@@ -42,6 +42,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_REBIND = "rebind"
         const val EXTRA_VOICE = "voice"
         const val EXTRA_VOICE_NAME = "voice_name"
+        private const val TAG = "OverlayService"
         private const val CHAN = "ot_overlay"
         private const val NOTIF_ID = 1
         private const val RESULT_NOTIF_ID = 10
@@ -416,7 +417,4 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         try { wm.addView(v, lp) } catch (_: Exception) {}
     }
 
-    companion object {
-        private const val TAG = "OverlayService"
-    }
 }
