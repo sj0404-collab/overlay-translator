@@ -12,7 +12,7 @@ import java.net.URL
  * Minimal LLM-vision client. Three endpoints: Zen Vision (free, no key),
  * OpenRouter (user key), Google AI / Gemini Vision (user key). Also has
  * non-vision helpers: Zen translation, OpenRouter translation, Gemini
- * translation, and [detectSpeaker] for automatic voice selection.
+ * translation, and detectSpeaker() for automatic voice selection.
  */
 object LlmClient {
     val ZEN_FREE = listOf(
@@ -109,48 +109,59 @@ object LlmClient {
         )
     }
 
-    /** Ask the LLM who speaks this dialogue (MALE/FEMALE/NARRATOR/TEEN). */
+    /** Ask the LLM who speaks this dialogue (MALE/FEMALE/TEEN/NARRATOR). */
     fun detectSpeaker(ctx: android.content.Context, text: String): VoiceKind? {
         val key = EnginePrefs.googleApiKey(ctx)
         if (key.isBlank()) return null
         val model = EnginePrefs.googleModel(ctx).ifBlank { GEMINI_FREE.first() }
-        val prompt = "Look at this dialogue / caption text and return the speaker's gender as a single word: " +
-            "MALE, FEMALE, TEEN, or NARRATOR. Just return the word, nothing else.\n\nText:\n$text"
+        val prompt = "Look at this short dialogue text and return the speaker's gender as a single word: " +
+            "MALE, FEMALE, TEEN, or NARRATOR. Just the word, no explanation.\n\nText:\n$text"
         val body = JSONObject().apply {
             put("contents", JSONArray().put(JSONObject().apply {
                 put("parts", JSONArray().put(JSONObject().put("text", prompt)))
             }))
             put("generationConfig", JSONObject().put("temperature", 0.0))
         }
-        return runCatching {
-            val c = (URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key").openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"; c.doOutput = true
-                connectTimeout = 8000; readTimeout = 12000
-                setRequestProperty("Content-Type", "application/json")
-            }
+        val raw = runCatching {
+            val c = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key")
+                .openConnection() as HttpURLConnection
+            c.requestMethod = "POST"
+            c.doOutput = true
+            c.connectTimeout = 8000
+            c.readTimeout = 12000
+            c.setRequestProperty("Content-Type", "application/json")
             c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            val raw = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
+            val out = if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else ""
             c.disconnect()
+            out
+        }.getOrNull() ?: return null
+
+        return runCatching {
             val word = JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)
                 ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)?.optString("text", "")
                 ?.trim()?.split(" ")?.firstOrNull()?.uppercase() ?: return@runCatching null
-            when (word) { "MALE" -> VoiceKind.MALE; "FEMALE" -> VoiceKind.FEMALE;
-                "TEEN" -> VoiceKind.TEEN; else -> VoiceKind.OTHER }
+            when (word) {
+                "MALE" -> VoiceKind.MALE
+                "FEMALE" -> VoiceKind.FEMALE
+                "TEEN" -> VoiceKind.TEEN
+                else -> VoiceKind.OTHER
+            }
         }.getOrNull()
     }
 
     fun postJson(endpoint: String, bearer: String?, body: JSONObject): String? {
         return runCatching {
             val c = URL(endpoint).openConnection() as HttpURLConnection
-            c.requestMethod = "POST"; c.doOutput = true
-            c.connectTimeout = 15000; c.readTimeout = 35000
+            c.requestMethod = "POST"
+            c.doOutput = true
+            c.connectTimeout = 15000
+            c.readTimeout = 35000
             c.setRequestProperty("Content-Type", "application/json")
             c.setRequestProperty("HTTP-Referer", "https://github.com/sj0404-collab/overlay-translator")
             c.setRequestProperty("X-Title", "OverlayTranslator")
             if (!bearer.isNullOrBlank()) c.setRequestProperty("Authorization", bearer)
             c.outputStream.use { it.write(body.toString().toByteArray()) }
-            val raw = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)
-                .bufferedReader().readText()
+            val raw = if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else ""
             c.disconnect()
             val msg = JSONObject(raw).optJSONArray("choices")
                 ?.optJSONObject(0)
@@ -169,14 +180,19 @@ object LlmClient {
         return postJson(endpoint, bearer, body)
     }
 
+    /** Build a vision-call JSON body with intermediate variables (no paren counting). */
     private fun visionBody(model: String, bmp: Bitmap, prompt: String, maxTok: Int, maxSide: Int): JSONObject {
         val b64 = toJpegB64(bmp, maxSide)
-        return JSONObject().put("model", model).put("max_tokens", maxTok)
-            .put("messages", JSONArray().put(JSONObject().put("role", "user")
-                .put("content", JSONArray()
-                    .put(JSONObject().put("type", "text").put("text", prompt))
-                    .put(JSONObject().put("type", "image_url")
-                        .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64"))))
+        val userText = JSONObject().put("type", "text").put("text", prompt)
+        val userImage = JSONObject().put("type", "image_url")
+            .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64"))
+        val content = JSONArray().put(userText).put(userImage)
+        val userMessage = JSONObject().put("role", "user").put("content", content)
+        val messages = JSONArray().put(userMessage)
+        return JSONObject()
+            .put("model", model)
+            .put("max_tokens", maxTok)
+            .put("messages", messages)
     }
 
     private fun ocrPrompt(russianOnly: Boolean, scanMode: String): String {

@@ -329,8 +329,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
                 // Try speaker detection (best-effort, async)
                 Thread {
-                    val speaker = try { LlmClient.detectSpeaker(ctx = this, text = text) }
-                                ?: VoiceKind.FEMALE
+                    val speaker = runCatching { LlmClient.detectSpeaker(this, text) }.getOrNull()
+                        ?: VoiceKind.FEMALE
                     handler.post { applyVoiceForSpeaker(speaker) }
                 }.start()
             } catch (e: Exception) {
