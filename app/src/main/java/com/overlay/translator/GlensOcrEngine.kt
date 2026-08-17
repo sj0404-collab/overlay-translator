@@ -6,7 +6,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Random
+import kotlin.random.Random
 
 /**
  * Google Lens OCR via protobuf endpoint. Ported from Yomihon's GlensOcrEngine
@@ -319,5 +319,3 @@ private class ProtoWriter {
         output.write((v and 0x7F).toInt())
     }
 }
-
-private fun Random.nextBytes(count: Int): ByteArray = ByteArray(count).also { nextBytes(it) }
