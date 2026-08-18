@@ -125,8 +125,8 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val tx = 0f; val ty = 0f
-        val triggerRect = RectF(tx, ty, tx + triggerW, ty + triggerH)
+        val triggerRect = RectF(0f, 0f, triggerW, triggerH)
+        val cx = triggerW / 2f
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -136,15 +136,13 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
                 initialTouchY = event.rawY
                 isDragging = false
 
-                // Tap on trigger
+                // Tap on trigger button
                 if (triggerRect.contains(event.x, event.y)) {
-                    isDragging = false // Assume not dragging initially
                     return true
                 }
 
-                // Tap on item
+                // Tap on menu item (expanded only)
                 if (expanded && animProgress > 0.5f) {
-                    val cx = triggerW / 2f
                     for (i in items.indices) {
                         val y = (triggerH + gap + i * (itemH + gap)) * animProgress
                         val rx = cx - itemW / 2f + triggerW / 2f
@@ -157,15 +155,17 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
                     }
                 }
 
-                // Tap outside → collapse
-                if (expanded) { collapse(); return true }
+                // Outside everything — do NOT consume
+                if (expanded) collapse()
+                return false
             }
             MotionEvent.ACTION_MOVE -> {
+                if (!isDragging) return true // wait for threshold
                 val dx = event.rawX - initialTouchX
                 val dy = event.rawY - initialTouchY
                 if (abs(dx) > 10 || abs(dy) > 10) {
                     isDragging = true
-                    lp?.x = (initialX - dx).toInt() // Inverted X for Gravity.END
+                    lp?.x = (initialX - dx).toInt()
                     lp?.y = (initialY + dy).toInt()
                     wm?.updateViewLayout(this, lp)
                 }
@@ -174,13 +174,11 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
                     isDragging = false
-                    return true // Consume event if it was a drag
-                } else {
-                    // This is a tap on the trigger after all (not a drag)
-                    if (triggerRect.contains(event.x, event.y)) {
-                        toggle()
-                        return true
-                    }
+                    return true
+                }
+                if (triggerRect.contains(event.x, event.y)) {
+                    toggle()
+                    return true
                 }
             }
         }

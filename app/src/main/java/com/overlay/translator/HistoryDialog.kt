@@ -1,5 +1,7 @@
 package com.overlay.translator
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.view.Gravity
 import android.view.View
@@ -15,127 +17,141 @@ object HistoryDialog {
 
     fun show(ctx: Context, wm: WindowManager) {
         val items = ScanHistory.recent(ctx, 30)
-        val outer = RelativeLayout(ctx).apply {
-            setPadding(40, 80, 40, 40)
+
+        val outer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 60, 40, 40)
+            setBackgroundColor(0xFF0B1220.toInt())
         }
 
-        // Title + close ✕ on the same row, anchored to top
+        // Title row with ✕
         val titleRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            id = android.R.id.text1
+            setPadding(0, 0, 0, 16)
         }
-        val title = TextView(ctx).apply {
+        titleRow.addView(TextView(ctx).apply {
             text = if (items.isEmpty()) "📋 История (пусто)" else "📋 История сканирований"
-            setTextColor(0xFFE2E8F0.toInt())
-            textSize = 18f
+            setTextColor(0xFFE2E8F0.toInt()); textSize = 18f
             setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-        }
-        titleRow.addView(title)
-
-        // Spacer to push close button to the right
-        val spacerView = TextView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
-        }
-        titleRow.addView(spacerView)
-
-        // Always-visible close ✕
-        val closeBtn = Button(ctx).apply {
-            text = "✕"
-            textSize = 18f
+        })
+        titleRow.addView(Button(ctx).apply {
+            text = "✕"; textSize = 20f
             setOnClickListener { DialogOverlay.dismiss() }
-            setPadding(20, 10, 20, 10)
-        }
-        titleRow.addView(closeBtn)
+            setPadding(24, 8, 24, 8)
+        })
+        outer.addView(titleRow)
 
-        // Body
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-        }
         if (items.isEmpty()) {
-            body.addView(TextView(ctx).apply {
-                text = "Сделайте первый скан для появления записей."
-                setTextColor(0xFF94A3B8.toInt())
-                textSize = 14f
+            outer.addView(TextView(ctx).apply {
+                text = "Сделайте первый скан"
+                setTextColor(0xFF94A3B8.toInt()); textSize = 14f
                 setPadding(20, 30, 20, 30)
             })
         } else {
             val scroll = ScrollView(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    (ctx.resources.displayMetrics.heightPixels / 2).coerceAtMost(800)
-                )
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             }
             val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-            for (i in items.indices) {
-                val (time, ocr, tr) = items[i]
-                val entry = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(20, 14, 20, 14)
-                }
-                entry.addView(TextView(ctx).apply {
-                    text = "⏰ $time"
-                    setTextColor(0xFF64748B.toInt())
-                    textSize = 11f
+            for (item in items) {
+                val (time, ocr, tr) = item
+                list.addView(buildEntry(ctx, time, ocr, tr))
+                list.addView(LinearLayout(ctx).apply {
+                    setBackgroundColor(0xFF334155.toInt())
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, 1)
                 })
-                if (ocr.isNotBlank()) {
-                    entry.addView(TextView(ctx).apply {
-                        text = "🔍 ${ocr.take(140)}${if (ocr.length > 140) "..." else ""}"
-                        setTextColor(0xFFE2E8F0.toInt())
-                        textSize = 13f
-                    })
-                }
-                if (tr.isNotBlank() && tr != ocr) {
-                    entry.addView(TextView(ctx).apply {
-                        text = "📝 ${tr.take(140)}${if (tr.length > 140) "..." else ""}"
-                        setTextColor(0xFF5B8DEF.toInt())
-                        textSize = 13f
-                    })
-                }
-                list.addView(entry)
-                if (i < items.size - 1) {
-                    val div = View(ctx).apply {
-                        setBackgroundColor(0xFF334155.toInt())
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, 1
-                        )
-                    }
-                    list.addView(div)
-                }
             }
             scroll.addView(list)
-            body.addView(scroll)
+            outer.addView(scroll)
         }
 
-        // Bottom clear button
-        if (items.isNotEmpty()) {
-            val clearBtn = Button(ctx).apply {
-                text = "🗑 Очистить"
-                setOnClickListener {
-                    ScanHistory.clear(ctx)
-                    DialogOverlay.dismiss()
-                }
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = 20 }
-            }
-            body.addView(clearBtn)
-        }
-
-        outer.addView(titleRow, RelativeLayout.LayoutParams(
-            RelativeLayout.LayoutParams.MATCH_PARENT,
-            RelativeLayout.LayoutParams.WRAP_CONTENT
-        ).apply { addRule(RelativeLayout.ALIGN_PARENT_TOP) })
-
-        outer.addView(body, RelativeLayout.LayoutParams(
-            RelativeLayout.LayoutParams.MATCH_PARENT,
-            RelativeLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            addRule(RelativeLayout.BELOW, titleRow.id)
-            topMargin = 20
+        // Bottom row
+        outer.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 16, 0, 0)
+            if (items.isNotEmpty()) addView(Button(ctx).apply {
+                text = "🗑 Очистить"; layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
+                setOnClickListener { ScanHistory.clear(ctx); DialogOverlay.dismiss() }
+            })
+            addView(Button(ctx).apply {
+                text = "Закрыть"; layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
+                setOnClickListener { DialogOverlay.dismiss() }
+            })
         })
 
-        DialogOverlay.show(ctx, wm, outer)
+        DialogOverlay.show(ctx, wm, outer,
+            (ctx.resources.displayMetrics.heightPixels * 0.7f).toInt())
+    }
+
+    private fun buildEntry(ctx: Context, time: String, ocr: String, tr: String): LinearLayout {
+        val wrap = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(20, 12, 20, 12)
+            tag = false // expanded = false
+        }
+
+        wrap.addView(TextView(ctx).apply {
+            text = "⏰ $time"
+            setTextColor(0xFF64748B.toInt()); textSize = 11f
+        })
+
+        if (ocr.isNotBlank()) {
+            val maxLen = 100
+            val short = ocr.take(maxLen) + if (ocr.length > maxLen) "…" else ""
+            val expandable = TextView(ctx).apply {
+                text = "🔍 $short"
+                setTextColor(0xFFE2E8F0.toInt()); textSize = 13f
+                if (ocr.length > maxLen) {
+                    setOnLongClickListener {
+                        text = if ((wrap.tag as? Boolean) == true) {
+                            wrap.tag = false
+                            "🔍 $short"
+                        } else {
+                            wrap.tag = true
+                            "🔍 $ocr"
+                        }
+                        true
+                    }
+                }
+            }
+            wrap.addView(expandable)
+
+            // Also allow single tap for copy to clipboard
+            expandable.setOnClickListener {
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("ocr", ocr))
+            }
+        }
+
+        if (tr.isNotBlank() && tr != ocr) {
+            val maxLen = 100
+            val short = tr.take(maxLen) + if (tr.length > maxLen) "…" else ""
+            val expandable = TextView(ctx).apply {
+                text = "📝 $short"
+                setTextColor(0xFF5B8DEF.toInt()); textSize = 13f
+                if (tr.length > maxLen) {
+                    setOnLongClickListener {
+                        text = if ((wrap.tag as? Boolean) == true) {
+                            wrap.tag = false
+                            "📝 $short"
+                        } else {
+                            wrap.tag = true
+                            "📝 $tr"
+                        }
+                        true
+                    }
+                }
+            }
+            wrap.addView(expandable)
+            expandable.setOnClickListener {
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("tr", tr))
+            }
+        }
+
+        return wrap
     }
 }
