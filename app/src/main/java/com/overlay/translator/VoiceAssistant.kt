@@ -21,7 +21,7 @@ object VoiceAssistant {
 
     fun analyze(text: String, configuredKind: VoiceKind): VoiceDecision {
         val clean = text.trim()
-        if (clean.isBlank()) return defaultDecision(configuredKind)
+        if (clean.isEmpty()) return defaultDecision(configuredKind)
         val features = extractFeatures(clean)
         val scores: MutableMap<VoiceKind, Float> = EnumMap(VoiceKind::class.java)
         scores[VoiceKind.FEMALE] = features.femaleScore
@@ -29,9 +29,11 @@ object VoiceAssistant {
         scores[VoiceKind.TEEN] = features.teenScore
         scores[VoiceKind.OTHER] = features.narratorScore
         scores[configuredKind] = (scores[configuredKind] ?: 0f) + 0.3f
-        val best = scores.entries.maxByOrNull { it.value }
-        val winner = best?.key ?: configuredKind
-        val bestScore = best?.value ?: 0f
+        var winner = configuredKind
+        var bestScore = 0f
+        for ((entryKey, scoreValue) in scores) {
+            if (scoreValue > bestScore) { winner = entryKey; bestScore = scoreValue }
+        }
         val pitch = when (winner) {
             VoiceKind.MALE -> 0.92f
             VoiceKind.FEMALE -> 1.08f
@@ -44,9 +46,8 @@ object VoiceAssistant {
             features.isShortUtterance -> 1.1f
             else -> 0.96f
         }
-        val reason = buildReason(winner, features, bestScore)
-        Log.i(TAG, "analyze: kind=$winner pitch=$pitch score=$bestScore")
-        return VoiceDecision(winner, pitch, rate, reason)
+        Log.i(TAG, "analyze: kind=$winner score=$bestScore")
+        return VoiceDecision(winner, pitch, rate, buildReason(winner, features, bestScore))
     }
 
     private data class TextFeatures(
@@ -60,34 +61,31 @@ object VoiceAssistant {
     )
 
     private fun extractFeatures(text: String): TextFeatures {
-        val lower = text.lowercase(Locale.getDefault())
+        val lower = text.lowercase(Locale.getDefault()).trim()
         val words = lower.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val isShort = words.size <= 3
 
         val feminineVerbs = words.count { it.matches(Regex(".*(ла|лась|илась|ила|юсь|ается)[а-яё]*")) }
         val masculineVerbs = words.count { it.matches(Regex(".*(ло|лся|ился|ил|ает|ел)[а-яё]*")) }
 
-        val sheWords = words.count { it in listOf("она", "ее", "ей", "своя", "свой") }
+        val sheWords = words.count { it in listOf("она", "ее", "ей", "своя", "себе") }
         val heWords = words.count { it in listOf("он", "его", "ему", "ним", "свой") }
 
-        val feminineNames = listOf("мария", "анна", "елена", "екатерина", "наталья", "ольга", "татьяна", "ирина", "валентина", "карина", "алина", "вероника", "виктория", "дарья", "марина", "светлана")
-        val masculineNames = listOf("александр", "сергей", "дмитрий", "иван", "николай", "виктор", "алексей", "павел", "михаил", "андрей", "владимир", "артем", "илья", "кирилл", "роман")
-        val teenNames = listOf("алёша", "соня", "маша", "даша", "саша", "паша")
+        val feminineNames = listOf("мария", "анна", "елена", "наталья", "ольга", "татьяна", "ирина", "валентина", "карина", "алина", "вероника", "виктория", "дарья", "марина", "светлана")
+        val masculineNames = listOf("александр", "сергей", "дмитрий", "иван", "николай", "виктор", "алексей", "павел", "михаил", "андрей", "владимир", "артем", "илья", "кирилл", "роман", "николаевич", "александрович", "сергеевич", "дмитриевич", "владимирович")
+        val teenNames = listOf("алёша", "алеша", "соня", "маша", "даша", "саша", "паша", "ваня", "коля", "петя", "дима")
 
         val femaleNameScore = words.count { w -> feminineNames.any { n -> w.contains(n) } }.toFloat() * 2f
         val maleNameScore = words.count { w -> masculineNames.any { n -> w.contains(n) } }.toFloat() * 2f
         val teenNameScore = words.count { w -> teenNames.any { n -> w.contains(n) } }.toFloat() * 2f
 
-        val exclCount = text.count { it == '!' || it == '！' }
-        val quesCount = text.count { it == '?' || it == '？' }
-        val hasExclamation = exclCount >= 1
-        val hasQuestion = quesCount >= 1
+        val hasExclamation = text.count { it == '!' || it == '！' } >= 1
+        val hasQuestion = text.count { it == '?' || it == '？' } >= 1
         val capsRatio = if (text.isNotEmpty()) {
             text.count { it.isUpperCase() }.toFloat() / text.length
         } else 0f
 
-        val isShort = words.size <= 3
-
-        val narratorTopics = listOf("панель", "страница", "глава", "menu", "chat", "настройки", "версия", "скачать", "установ")
+        val narratorTopics = listOf("панель", "страница", "глава", "menu", "chat", "настройки", "версия", "скачать", "установ", "приложени", "справка")
         val isNarratorTopic = narratorTopics.any { lower.contains(it) }
 
         val femaleScore = feminineVerbs * 0.8f + sheWords * 1.0f + femaleNameScore + if (isShort) 0.2f else 0f
@@ -110,14 +108,14 @@ object VoiceAssistant {
         kind = kind,
         pitch = 1.0f,
         rate = 0.96f,
-        reason = "текст пустой, голос по умолчанию",
+        reason = "текст пустой",
     )
 
     private fun buildReason(kind: VoiceKind, features: TextFeatures, score: Float): String {
         val kindLabel = when (kind) {
             VoiceKind.FEMALE -> "женский"
             VoiceKind.MALE -> "мужской"
-            VoiceKind.TEEN -> "подростковый"
+            VoiceKind.TEEN -> "подросток"
             else -> "рассказчик"
         }
         val mood = when {
@@ -127,6 +125,6 @@ object VoiceAssistant {
             features.isShortUtterance -> "короткая реплика"
             else -> "обычный"
         }
-        return "$kindLabel ($mood, score=${"%.1f".format(score)})"
+        return "$kindLabel / $mood (score " + "%.1f".format(score) + ")"
     }
 }
