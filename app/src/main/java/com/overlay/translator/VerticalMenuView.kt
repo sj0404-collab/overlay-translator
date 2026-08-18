@@ -163,9 +163,9 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.rawX - initialTouchX
                 val dy = event.rawY - initialTouchY
-                if (abs(dx) > 10 || abs(dy) > 10) { // Threshold for dragging
+                if (abs(dx) > 10 || abs(dy) > 10) {
                     isDragging = true
-                    lp?.x = (initialX + dx).toInt()
+                    lp?.x = (initialX - dx).toInt() // Inverted X for Gravity.END
                     lp?.y = (initialY + dy).toInt()
                     wm?.updateViewLayout(this, lp)
                 }

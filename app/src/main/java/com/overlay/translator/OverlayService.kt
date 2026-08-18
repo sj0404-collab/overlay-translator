@@ -303,8 +303,16 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         val engine = EnginePrefs.ocr(this)
                         val lang = scanLang()
                         var text = router.read(piece, engine, lang).trim()
-                        // Filter out short/unlikely strings (common OCR noise from icons/stamps)
-                        text = text.lines().filter { it.length > 2 && it.contains(" ") }.joinToString("\n")
+                        // Post-process: collapse dots/exclamation, normalize spacing
+                        text = TextPostprocessor().postprocess(text)
+                        // Filter out icon labels / badge noise (short ASCII-only junk)
+                        // but keep any line with Cyrillic (real Russian text) regardless of length
+                        text = text.lines().filter { line ->
+                            if (line.isBlank()) return@filter false
+                            val hasCyrillic = line.any { it in '\u0400'..'\u04FF' }
+                            val isAsciiOnly = line.all { it in 'A'..'z' || it.isDigit() || it == ' ' || it == '/' }
+                            hasCyrillic || (line.length > 4 && isAsciiOnly && line.count { it.isLetter() } > 2)
+                        }.joinToString("\n")
                         if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
                         lastOcr = text; lastTr = ""
                         if (!livePass) toast("✓ ${text.take(60)}")
