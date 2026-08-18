@@ -342,11 +342,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 toast("✓ ${cleaned.take(60)}")
                 postResultNotification(text, cleaned)
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
-                // Try speaker detection (best-effort, async)
+                // Best-effort voice selection based on text linguistics
                 Thread {
-                    val speaker = runCatching { LlmClient.detectSpeaker(this, text) }.getOrNull()
-                        ?: VoiceKind.OTHER
-                    handler.post { applyVoiceForSpeaker(speaker) }
+                    val decision = VoiceAssistant.analyze(text, voiceKind)
+                    handler.post {
+                        applyVoiceDecision(decision)
+                        toast("🎙 ${decision.reason}")
+                    }
                 }.start()
             } catch (e: Exception) {
                 Log.e(TAG, "translate error", e); toast("Ошибка: ${e.message?.take(50)}")
@@ -354,7 +356,18 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    /** Pick voice/pitch based on detected speaker. */
+    /** Apply voice decision from VoiceAssistant. */
+    private fun applyVoiceDecision(d: VoiceAssistant.VoiceDecision) {
+        if (tts == null || !ttsReady) return
+        voiceKind = d.kind
+        safeApplyVoice()
+        try {
+            tts?.setPitch(d.pitch)
+            tts?.setSpeechRate(d.rate)
+        } catch (e: Exception) { Log.w(TAG, "pitch/rate failed", e) }
+    }
+
+    /** Fallback: pick voice/pitch based on detected speaker. */
     private fun applyVoiceForSpeaker(speaker: VoiceKind) {
         if (tts == null || !ttsReady) return
         try {
