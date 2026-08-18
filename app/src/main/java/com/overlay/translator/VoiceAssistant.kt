@@ -1,14 +1,13 @@
 package com.overlay.translator
 
 import android.util.Log
-import org.json.JSONObject
+import java.util.EnumMap
+import java.util.Locale
 
 /**
  * Local JSON-based voice assistant. Analyzes text for linguistic cues
  * (morphology, orthography, sentence structure) and automatically selects
  * the appropriate TTS voice + pitch for spoken output.
- *
- * No external API calls — all rules are local.
  */
 object VoiceAssistant {
     private const val TAG = "VoiceAssistant"
@@ -20,59 +19,35 @@ object VoiceAssistant {
         val reason: String,
     )
 
-    /**
-     * Analyze text and decide which voice/pitch to use.
-     * Returns a [VoiceDecision] with the recommended voice kind,
-     * pitch factor, speech rate, and a short human-readable reason.
-     */
     fun analyze(text: String, configuredKind: VoiceKind): VoiceDecision {
         val clean = text.trim()
         if (clean.isBlank()) return defaultDecision(configuredKind)
-
-        // Gather features
         val features = extractFeatures(clean)
-
-        // Score each voice kind
-        val scores = mutableMapOf<VoiceKind, Float>()
+        val scores: MutableMap<VoiceKind, Float> = EnumMap(VoiceKind::class.java)
         scores[VoiceKind.FEMALE] = features.femaleScore
         scores[VoiceKind.MALE] = features.maleScore
         scores[VoiceKind.TEEN] = features.teenScore
         scores[VoiceKind.OTHER] = features.narratorScore
-
-        // Apply configured preference as slight bias
         scores[configuredKind] = (scores[configuredKind] ?: 0f) + 0.3f
-
-        // Pick winner
-        val winner = scores.maxByOrNull { it.value } ?: configuredKind
-        val bestScore = scores[winner] ?: 0f
-
-        // Determine pitch and rate based on winner and features
+        val best = scores.entries.maxByOrNull { it.value }
+        val winner = best?.key ?: configuredKind
+        val bestScore = best?.value ?: 0f
         val pitch = when (winner) {
             VoiceKind.MALE -> 0.92f
             VoiceKind.FEMALE -> 1.08f
             VoiceKind.TEEN -> 1.20f
-            else -> 0.95f // narrator — deeper
+            else -> 0.95f
         }
         val rate = when {
-            features.hasExclamation -> 1.05f // excited
-            features.hasQuestion -> 0.92f    // questioning, slower
-            features.isShortUtterance -> 1.1f // short → faster
+            features.hasExclamation -> 1.05f
+            features.hasQuestion -> 0.92f
+            features.isShortUtterance -> 1.1f
             else -> 0.96f
         }
-
         val reason = buildReason(winner, features, bestScore)
-
-        Log.i(TAG, "analyze: kind=$winner pitch=$pitch rate=$rate score=$bestScore reason=$reason")
-
-        return VoiceDecision(
-            kind = winner,
-            pitch = pitch,
-            rate = rate,
-            reason = reason,
-        )
+        Log.i(TAG, "analyze: kind=$winner pitch=$pitch score=$bestScore")
+        return VoiceDecision(winner, pitch, rate, reason)
     }
-
-    /* ── Feature extraction ── */
 
     private data class TextFeatures(
         val femaleScore: Float,
@@ -85,27 +60,23 @@ object VoiceAssistant {
     )
 
     private fun extractFeatures(text: String): TextFeatures {
-        val lower = text.lowercase(Locale.US)
+        val lower = text.lowercase(Locale.getDefault())
         val words = lower.split(Regex("\\s+")).filter { it.isNotEmpty() }
 
-        // ── Morphology: Russian verb endings ──
-        val feminineVerbs = words.count { it.matches(Regex(".*ла[сь]?|.*лась|.*ется|.*илась|.*ила|.*лась|.*юсь|.*юсь")) }
-        val masculineVerbs = words.count { it.matches(Regex(".*л[сь]?[а-яё]*$|.*лся|.*лся|.*ил|.*ает|.*лся|.*лся")) }
+        val feminineVerbs = words.count { it.matches(Regex(".*(ла|лась|илась|ила|юсь|ается)[а-яё]*")) }
+        val masculineVerbs = words.count { it.matches(Regex(".*(ло|лся|ился|ил|ает|ел)[а-яё]*")) }
 
-        // ── Pronouns ──
-        val sheWords = words.count { it in listOf("она", "её", "ее", "себя", "свой") }
-        val heWords = words.count { it in listOf("он", "его", "ему", "себя", "свой") }
+        val sheWords = words.count { it in listOf("она", "ее", "ей", "своя", "свой") }
+        val heWords = words.count { it in listOf("он", "его", "ему", "ним", "свой") }
 
-        // ── Names (common Russian names pattern — ends with specific endings) ──
-        val feminineNames = listOf("мария", "анна", "екатерина", "елизавета", "настасья", "варвара", "дунаев", "звёздная", "сергеевна")
-        val masculineNames = listOf("александр", "сергей", "дмитрий", "иван", "николай", "виктор", "алексей", "павел")
-        val teenNames = listOf("ализа", "камилла", "алёша", "соня")
+        val feminineNames = listOf("мария", "анна", "елена", "екатерина", "наталья", "ольга", "татьяна", "ирина", "валентина", "карина", "алина", "вероника", "виктория", "дарья", "марина", "светлана")
+        val masculineNames = listOf("александр", "сергей", "дмитрий", "иван", "николай", "виктор", "алексей", "павел", "михаил", "андрей", "владимир", "артем", "илья", "кирилл", "роман")
+        val teenNames = listOf("алёша", "соня", "маша", "даша", "саша", "паша")
 
         val femaleNameScore = words.count { w -> feminineNames.any { n -> w.contains(n) } }.toFloat() * 2f
         val maleNameScore = words.count { w -> masculineNames.any { n -> w.contains(n) } }.toFloat() * 2f
         val teenNameScore = words.count { w -> teenNames.any { n -> w.contains(n) } }.toFloat() * 2f
 
-        // ── Orthography: exclamation marks, caps (excited) ──
         val exclCount = text.count { it == '!' || it == '！' }
         val quesCount = text.count { it == '?' || it == '？' }
         val hasExclamation = exclCount >= 1
@@ -114,17 +85,14 @@ object VoiceAssistant {
             text.count { it.isUpperCase() }.toFloat() / text.length
         } else 0f
 
-        // ── Short utterance detection ──
         val isShort = words.size <= 3
 
-        // ── Topic detection (for narrator) ──
-        val narratorTopics = listOf("╀", " панель ", "страница ", "глава", "menu", "chat", "настройки")
+        val narratorTopics = listOf("панель", "страница", "глава", "menu", "chat", "настройки", "версия", "скачать", "установ")
         val isNarratorTopic = narratorTopics.any { lower.contains(it) }
 
-        // ── Compute scores ──
         val femaleScore = feminineVerbs * 0.8f + sheWords * 1.0f + femaleNameScore + if (isShort) 0.2f else 0f
         val maleScore = masculineVerbs * 0.8f + heWords * 1.0f + maleNameScore
-        val teenScore = teenNameScore + if (lower.contains("подрост") || lower.contains("ребёнок")) 1.5f else 0f
+        val teenScore = teenNameScore + if (lower.contains("подросток") || lower.contains("ребёнок")) 1.5f else 0f
         val narratorScore = if (isNarratorTopic) 1.5f else capsRatio * 0.5f
 
         return TextFeatures(
@@ -150,10 +118,10 @@ object VoiceAssistant {
             VoiceKind.FEMALE -> "женский"
             VoiceKind.MALE -> "мужской"
             VoiceKind.TEEN -> "подростковый"
-            VoiceKind.OTHER -> "рассказчик"
+            else -> "рассказчик"
         }
         val mood = when {
-            features.hasExclamation && features.hasQuestion -> "вопросительный восклицательный"
+            features.hasExclamation && features.hasQuestion -> "вопросительно-восклицательный"
             features.hasExclamation -> "восклицательный"
             features.hasQuestion -> "вопросительный"
             features.isShortUtterance -> "короткая реплика"
