@@ -25,7 +25,7 @@ object FaceAnalyzer {
 
     private var detector: FaceDetector? = null
 
-    fun init(context: Context) {
+    fun init(@Suppress("UNUSED_PARAMETER") context: Context) {
         val opts = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
             .setMinFaceSize(0.15f)

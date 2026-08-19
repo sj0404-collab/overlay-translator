@@ -96,7 +96,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels; screenH = dm.heightPixels; density = dm.densityDpi
         Thread { ocr = OcrRouter(this); translator = Translator(this) }.start()
-        FaceAnalyzer.init(this)
+        faceAnalyzer = FaceAnalyzer(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -236,13 +236,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         EnginePrefs.setRegionMode(this, regionPreset)
         region = null // reset manual region
         toast("Зона: ${regionLabel(regionPreset)}")
-        // Re-show menu to update the item label
         menu?.collapse()
         handler.postDelayed({ showMenu() }, 250)
     }
 
-    /* ─────── Region ─────── */
-
+    /* Region selection */
     private fun startRegionPick() {
         if (regionView != null) return
         menu?.visibility = View.INVISIBLE
@@ -264,8 +262,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         wm.addView(rv, lp)
     }
 
-    /* ─────── Toast ─────── */
-
+    /** Brief on-screen status */
     private fun toast(msg: String) {
         handler.post {
             val tv = TextView(this).apply {
@@ -286,36 +283,35 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
-    /* ─────── Scan ─────── */
-
+    /* Capture screen and run OCR + face analysis + translation */
     private fun captureThen(ocrOnly: Boolean, livePass: Boolean = false) {
         val r = region ?: applyRegionPreset().also { region = it }
         if (!busy.compareAndSet(false, true)) return
-        // Hide all overlays BEFORE taking screenshot to avoid capturing toast/menu text
         menu?.visibility = View.INVISIBLE
-        // Delay to ensure overlays are hidden before grabbing screen
         handler.postDelayed({
             Thread {
                 try {
                     val piece = grab(r) ?: return@Thread
 
-                        // Analyze faces for voice selection
-                        try {
-                            val faceAnalysis = faceAnalyzer?.analyze(piece)
-                            if (faceAnalysis != null && faceAnalysis.gender != FaceAnalyzer.Gender.UNKNOWN && faceAnalysis.faceCount > 0) {
-                                val newVoiceKind = when (faceAnalysis.gender) {
-                                    FaceAnalyzer.Gender.MALE -> VoiceKind.MALE
-                                    FaceAnalyzer.Gender.FEMALE -> VoiceKind.FEMALE
-                                    else -> voiceKind
-                                }
-                                voiceKind = newVoiceKind
-                                safeApplyVoice()
-                                val gLabel = when (faceAnalysis.gender) { FaceAnalyzer.Gender.MALE -> "мужской"; FaceAnalyzer.Gender.FEMALE -> "женский"; else -> "?" }
-                                handler.post { toast("Лиц: ${faceAnalysis.faceCount}, пол: $gLabel") }
+                    // Run face analysis for voice selection (non-blocking)
+                    var faceSummary = ""
+                    try {
+                        val fa = faceAnalyzer?.analyze(piece)
+                        if (fa != null && fa.gender != FaceAnalyzer.Gender.UNKNOWN && fa.faceCount > 0) {
+                            val newKind = when (fa.gender) {
+                                FaceAnalyzer.Gender.MALE -> VoiceKind.MALE
+                                FaceAnalyzer.Gender.FEMALE -> VoiceKind.FEMALE
+                                else -> voiceKind
                             }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "face analysis failed", e)
+                            voiceKind = newKind
+                            safeApplyVoice()
+                            val gl = if (fa.gender == FaceAnalyzer.Gender.MALE) "мужской" else "женский"
+                            faceSummary = " · лиц:$gl"
                         }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "face analysis failed", e)
+                    }
+
                     try {
                         val h = PerceptualHash.of(piece)
                         if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread
@@ -324,9 +320,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         val engine = EnginePrefs.ocr(this)
                         val lang = scanLang()
                         var text = router.read(piece, engine, lang).trim()
-                        // Post-process with TextPostprocessor from Yomihon
                         text = TextPostprocessor().postprocess(text)
-                        // Filter out short/noise lines
+                        // Noise filter: keep Cyrillic lines, filter short ASCII noise
                         text = text.lines().filter { line ->
                             if (line.isBlank()) return@filter false
                             val hasCyrillic = line.any { it in '\u0400'..'\u04FF' }
@@ -335,15 +330,15 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         }.joinToString("\n")
                         if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
                         lastOcr = text; lastTr = ""
-                        if (!livePass) toast("✓ ${text.take(60)}")
+                        if (!livePass) toast("✓ ${text.take(60)}$faceSummary")
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
-                        // Auto-select voice based on text linguistics
+                        // Auto voice selection based on text
                         Thread {
-                            val decision = VoiceAssistant.analyze(text, voiceKind)
+                            val d = VoiceAssistant.analyze(text, voiceKind)
                             handler.post {
-                                applyVoiceDecision(decision)
-                                Log.i(TAG, "voice: ${decision.reason}")
+                                applyVoiceDecision(d)
+                                Log.i(TAG, "voice: ${d.reason}")
                             }
                         }.start()
                         if (!ocrOnly) applyTranslate(text)
@@ -354,11 +349,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     handler.post { menu?.visibility = View.VISIBLE }; busy.set(false)
                 }
             }.start()
-        }, 200) // Increased from 140 to 200ms to ensure overlays are hidden
+        }, 250)
     }
 
-    /* ─────── Translate ─────── */
-
+    /* Translation */
     private fun applyTranslate(text: String) {
         if (!translating.compareAndSet(false, true)) return
         toast("🔄 Перевожу…")
@@ -370,12 +364,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 toast("✓ ${cleaned.take(60)}")
                 postResultNotification(text, cleaned)
                 ScanHistory.add(this, text, cleaned, EnginePrefs.ocr(this))
-                // Best-effort voice selection based on text linguistics
                 Thread {
-                    val decision = VoiceAssistant.analyze(text, voiceKind)
+                    val d = VoiceAssistant.analyze(text, voiceKind)
                     handler.post {
-                        applyVoiceDecision(decision)
-                        toast("🎙 ${decision.reason}")
+                        applyVoiceDecision(d)
+                        toast("🎙 ${d.reason}")
                     }
                 }.start()
             } catch (e: Exception) {
@@ -384,7 +377,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    /** Apply voice decision from VoiceAssistant — changes voice kind, pitch, and rate. */
+    /** Apply voice decision from VoiceAssistant */
     private fun applyVoiceDecision(d: VoiceAssistant.VoiceDecision) {
         if (tts == null || !ttsReady) return
         try {
@@ -392,12 +385,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             safeApplyVoice()
             tts?.setPitch(d.pitch)
             tts?.setSpeechRate(d.rate)
-            Log.i(TAG, "voice applied: ${d.kind} pitch=${d.pitch} rate=${d.rate}")
+            Log.i(TAG, "voice: ${d.kind} pitch=${d.pitch} rate=${d.rate}")
         } catch (e: Exception) { Log.w(TAG, "voice apply failed", e) }
     }
 
-    /* ─────── Notifications ─────── */
-
+    /* Notifications */
     private fun postResultNotification(ocr: String, tr: String) {
         val nm = getSystemService(NotificationManager::class.java)
         val combined = if (tr.isNotBlank()) "$ocr\n→ $tr" else ocr
@@ -423,8 +415,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             .setOngoing(true).build()
     }
 
-    /* ─────── Voice ─────── */
-
+    /* Voice */
     private fun safeApplyVoice() {
         try { tts?.let { VoiceHelper.apply(it, voiceKind, voiceName) } } catch (_: Exception) {}
     }
@@ -452,8 +443,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         } else { ttsReady = false; Log.w(TAG, "TTS init: $status") }
     }
 
-    /* ─────── Grab ─────── */
-
+    /* Screen grab */
     private fun grab(r: RectF): Bitmap? {
         val img = reader?.acquireLatestImage() ?: reader?.acquireNextImage() ?: return null
         return try {
@@ -477,29 +467,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }
         DialogOverlay.dismiss()
         vdisplay?.release(); reader?.close(); projection?.stop()
+        faceAnalyzer?.close()
         try { tts?.shutdown() } catch (_: Exception) {}; ocr?.close()
         super.onDestroy()
-    }
-
-    private fun addDraggable(v: View, lp: WindowManager.LayoutParams) {
-        var px = 0f; var py = 0f
-        var initialX = 0f; var initialY = 0f
-        v.setOnTouchListener { view, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = lp.x.toFloat(); initialY = lp.y.toFloat()
-                    px = e.rawX; py = e.rawY
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = e.rawX - px; val dy = e.rawY - py
-                    lp.x = (initialX + dx).toInt(); lp.y = (initialY + dy).toInt()
-                    wm.updateViewLayout(view, lp)
-                    true
-                }
-                else -> false
-            }
-        }
-        try { wm.addView(v, lp) } catch (_: Exception) {}
     }
 }
