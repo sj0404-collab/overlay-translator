@@ -27,12 +27,20 @@ object EnginePrefs {
     fun setGoogleApiKey(ctx: Context, v: String) = sp(ctx).edit().putString("google_api_key", v).apply()
 
     /** Rotate to next key if current one is exhausted / rate-limited. */
-    fun rotateGoogleKey(ctx: Context) {
+    fun rotateGoogleKey(ctx: Context): Boolean {
         val current = googleApiKey(ctx)
         val idx = ALT_GOOGLE_KEYS.indexOf(current)
-        val next = if (idx >= 0 && idx + 1 < ALT_GOOGLE_KEYS.size) ALT_GOOGLE_KEYS[idx + 1] else DEFAULT_GOOGLE_KEY
-        setGoogleApiKey(ctx, next)
-        Log.i(TAG, "Google key rotated to: ${next.take(10)}...")
+        if (idx >= 0 && idx + 1 < ALT_GOOGLE_KEYS.size) {
+            setGoogleApiKey(ctx, ALT_GOOGLE_KEYS[idx + 1])
+            Log.i(TAG, "Google key rotated to: ${ALT_GOOGLE_KEYS[idx + 1].take(10)}...")
+            return true
+        }
+        if (current != DEFAULT_GOOGLE_KEY) {
+            setGoogleApiKey(ctx, DEFAULT_GOOGLE_KEY)
+            Log.i(TAG, "Google key reset to default: ${DEFAULT_GOOGLE_KEY.take(10)}...")
+            return true
+        }
+        return false
     }
 
     fun googleModel(ctx: Context) = sp(ctx).getString("google_model", "gemini-2.5-flash") ?: "gemini-2.5-flash"
@@ -41,16 +49,11 @@ object EnginePrefs {
     fun orModel(ctx: Context) = sp(ctx).getString("or_model", "google/gemini-2.5-flash") ?: "google/gemini-2.5-flash"
     fun setOrModel(ctx: Context, v: String) = sp(ctx).edit().putString("or_model", v).apply()
 
-    fun openrouterKey(ctx: Context) = sp(ctx).getString("or_key", "") ?: ""
-    fun setOpenrouterKey(ctx: Context, v: String) = sp(ctx).edit().putString("or_key", v).apply()
-
     /* ────────────── OpenRouter ────────────── */
     private const val DEFAULT_OPENROUTER_KEY = "sk-orca-T4iffQ94PFFSalDxhedoAntItEZLT4KRmEBTntD2eSo"
 
     fun openrouterKey(ctx: Context) = sp(ctx).getString("or_key", DEFAULT_OPENROUTER_KEY) ?: DEFAULT_OPENROUTER_KEY
     fun setOpenrouterKey(ctx: Context, v: String) = sp(ctx).edit().putString("or_key", v).apply()
-
-    private const val TAG = "EnginePrefs"
 
     /* ────────────── Zen (free cloud LLM) ────── */
     fun zenModel(ctx: Context) = sp(ctx).getString("zen_model", LlmClient.ZEN_FREE.first()) ?: LlmClient.ZEN_FREE.first()
@@ -90,4 +93,6 @@ object EnginePrefs {
     fun incrementTokens(ctx: Context, plus: Long) {
         setTokenUsageCount(ctx, tokenUsageCount(ctx) + plus)
     }
+
+    private const val TAG = "EnginePrefs"
 }
