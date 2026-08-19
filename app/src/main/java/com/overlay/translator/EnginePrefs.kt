@@ -1,6 +1,7 @@
 package com.overlay.translator
 
 import android.content.Context
+import android.util.Log
 
 /**
  * Local pref store for the overlay translator. Backed by SharedPreferences
@@ -16,8 +17,23 @@ object EnginePrefs {
     fun setOcr(ctx: Context, v: String) = sp(ctx).edit().putString("ocr", v).apply()
 
     /* ────────────── Cloud OCR keys ──────────── */
-    fun googleApiKey(ctx: Context) = sp(ctx).getString("google_api_key", "") ?: ""
+    private const val DEFAULT_GOOGLE_KEY = "AIzaSyApRibMUSjrvy2tgRgRzPLSEG-ZVuU9Xl8"
+    private val ALT_GOOGLE_KEYS = listOf(
+        "AIzaSyBAZZ82P6o66hgAZvg-W_EILYCCt_fr73Y",
+        "AIzaSyDvuulpv04xdyuCq7oXZC7Yj9HnL_1yod0",
+    )
+
+    fun googleApiKey(ctx: Context) = sp(ctx).getString("google_api_key", DEFAULT_GOOGLE_KEY) ?: DEFAULT_GOOGLE_KEY
     fun setGoogleApiKey(ctx: Context, v: String) = sp(ctx).edit().putString("google_api_key", v).apply()
+
+    /** Rotate to next key if current one is exhausted / rate-limited. */
+    fun rotateGoogleKey(ctx: Context) {
+        val current = googleApiKey(ctx)
+        val idx = ALT_GOOGLE_KEYS.indexOf(current)
+        val next = if (idx >= 0 && idx + 1 < ALT_GOOGLE_KEYS.size) ALT_GOOGLE_KEYS[idx + 1] else DEFAULT_GOOGLE_KEY
+        setGoogleApiKey(ctx, next)
+        Log.i(TAG, "Google key rotated to: ${next.take(10)}...")
+    }
 
     fun googleModel(ctx: Context) = sp(ctx).getString("google_model", "gemini-2.5-flash") ?: "gemini-2.5-flash"
     fun setGoogleModel(ctx: Context, v: String) = sp(ctx).edit().putString("google_model", v).apply()
@@ -27,6 +43,14 @@ object EnginePrefs {
 
     fun openrouterKey(ctx: Context) = sp(ctx).getString("or_key", "") ?: ""
     fun setOpenrouterKey(ctx: Context, v: String) = sp(ctx).edit().putString("or_key", v).apply()
+
+    /* ────────────── OpenRouter ────────────── */
+    private const val DEFAULT_OPENROUTER_KEY = "sk-orca-T4iffQ94PFFSalDxhedoAntItEZLT4KRmEBTntD2eSo"
+
+    fun openrouterKey(ctx: Context) = sp(ctx).getString("or_key", DEFAULT_OPENROUTER_KEY) ?: DEFAULT_OPENROUTER_KEY
+    fun setOpenrouterKey(ctx: Context, v: String) = sp(ctx).edit().putString("or_key", v).apply()
+
+    private const val TAG = "EnginePrefs"
 
     /* ────────────── Zen (free cloud LLM) ────── */
     fun zenModel(ctx: Context) = sp(ctx).getString("zen_model", LlmClient.ZEN_FREE.first()) ?: LlmClient.ZEN_FREE.first()
