@@ -13,20 +13,19 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import kotlin.math.abs
 
 /**
- * Vertical floating menu (like SAO side menu).
- * Single trigger button → expands downward as a vertical list of items.
- * Can be dragged by the trigger button.
+ * Vertical floating menu — single trigger button, expands into vertical list.
+ * Drag by the trigger button; taps on items trigger their onClick.
  */
 class VerticalMenuView(context: Context, private val items: List<VerticalItem>) : View(context) {
 
     data class VerticalItem(val label: String, val icon: String, val onClick: () -> Unit)
 
-    private val triggerH = 56f
-    private val triggerW = 56f
-    private val itemH = 52f
-    private val itemW = 180f
-    private val gap = 6f
-    private val corner = 16f
+    private val triggerH = 64f
+    private val triggerW = 64f
+    private val itemH = 56f
+    private val itemW = 200f
+    private val gap = 8f
+    private val corner = 20f
 
     private val triggerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xE05B8DEF.toInt(); style = Paint.Style.FILL
@@ -35,22 +34,22 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
         color = 0xDD1E293B.toInt(); style = Paint.Style.FILL
     }
     private val itemStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF5B8DEF.toInt(); style = Paint.Style.STROKE; strokeWidth = 1.5f
+        color = 0xFF5B8DEF.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
     }
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE; textSize = 24f; textAlign = Paint.Align.CENTER
+        color = Color.WHITE; textSize = 28f; textAlign = Paint.Align.CENTER
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFE2E8F0.toInt(); textSize = 16f; textAlign = Paint.Align.LEFT
+        color = 0xFFE2E8F0.toInt(); textSize = 18f; textAlign = Paint.Align.LEFT
     }
 
     private var expanded = false
     private var animProgress = 0f
     private var animator: ValueAnimator? = null
 
-    // Dragging
+    // Drag state
     private var initialX = 0f; private var initialY = 0f
-    private var initialTouchX = 0f; private var initialTouchY = 0f
+    private var touchStartX = 0f; private var touchStartY = 0f
     private var isDragging = false
     private var wm: WindowManager? = null
     private var lp: WindowManager.LayoutParams? = null
@@ -62,27 +61,21 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
 
     fun expandedHeight(): Float = (triggerH + items.size * (itemH + gap) + gap) * 1.1f
 
-    fun toggle() {
-        if (expanded) collapse() else expand()
-    }
+    fun toggle() { if (expanded) collapse() else expand() }
 
     fun expand() {
-        expanded = true
-        animator?.cancel()
+        expanded = true; animator?.cancel()
         animator = ValueAnimator.ofFloat(animProgress, 1f).apply {
             duration = 220; interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { animProgress = it.animatedValue as Float; invalidate() }
-            start()
+            addUpdateListener { animProgress = it.animatedValue as Float; invalidate() }; start()
         }
     }
 
     fun collapse() {
-        expanded = false
-        animator?.cancel()
+        expanded = false; animator?.cancel()
         animator = ValueAnimator.ofFloat(animProgress, 0f).apply {
             duration = 180; interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { animProgress = it.animatedValue as Float; invalidate() }
-            start()
+            addUpdateListener { animProgress = it.animatedValue as Float; invalidate() }; start()
         }
     }
 
@@ -92,7 +85,7 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
         super.onDraw(c)
         val cx = triggerW / 2f
 
-        // Draw expanded items
+        // Expanded items
         if (animProgress > 0.01f) {
             for (i in items.indices) {
                 val y = (triggerH + gap + i * (itemH + gap)) * animProgress
@@ -106,80 +99,69 @@ class VerticalMenuView(context: Context, private val items: List<VerticalItem>) 
                 c.drawRoundRect(rect, corner, corner, itemStroke)
 
                 iconPaint.alpha = alpha
-                c.drawText(items[i].icon, rx + 24f, ry + itemH / 2f + 8f, iconPaint)
-
+                c.drawText(items[i].icon, rx + 24f, ry + itemH / 2f + 10f, iconPaint)
                 labelPaint.alpha = alpha
-                c.drawText(items[i].label, rx + 50f, ry + itemH / 2f + 6f, labelPaint)
+                c.drawText(items[i].label, rx + 52f, ry + itemH / 2f + 6f, labelPaint)
             }
         }
 
         // Trigger button
-        val tx = 0f
-        val ty = 0f
-        val tRect = RectF(tx, ty, tx + triggerW, ty + triggerH)
+        val tRect = RectF(0f, 0f, triggerW, triggerH)
         c.drawRoundRect(tRect, corner, corner, triggerPaint)
-        c.drawRoundRect(tRect, corner, corner, itemStroke.apply { strokeWidth = 2f })
-        iconPaint.alpha = 255; iconPaint.textSize = 28f
-        c.drawText(if (expanded) "✕" else "☰", tx + triggerW / 2f, ty + triggerH / 2f + 10f, iconPaint)
-        iconPaint.textSize = 24f
+        c.drawRoundRect(tRect, corner, corner, itemStroke.apply { strokeWidth = 2.5f })
+        iconPaint.alpha = 255; iconPaint.textSize = 30f
+        c.drawText(if (expanded) "✕" else "☰", triggerW / 2f, triggerH / 2f + 12f, iconPaint)
+        iconPaint.textSize = 28f
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val triggerRect = RectF(0f, 0f, triggerW, triggerH)
-        val cx = triggerW / 2f
+        val dx = event.rawX - touchStartX
+        val dy = event.rawY - touchStartY
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 initialX = lp?.x?.toFloat() ?: 0f
                 initialY = lp?.y?.toFloat() ?: 0f
-                initialTouchX = event.rawX
-                initialTouchY = event.rawY
+                touchStartX = event.rawX
+                touchStartY = event.rawY
                 isDragging = false
 
-                // Tap on trigger button
                 if (triggerRect.contains(event.x, event.y)) {
-                    return true
+                    return true // Start potential drag
                 }
 
-                // Tap on menu item (expanded only)
                 if (expanded && animProgress > 0.5f) {
+                    val cx = triggerW / 2f
                     for (i in items.indices) {
                         val y = (triggerH + gap + i * (itemH + gap)) * animProgress
                         val rx = cx - itemW / 2f + triggerW / 2f
-                        if (event.x in (rx - 10)..(rx + itemW + 10) &&
-                            event.y in (y - 10)..(y + itemH + 10)) {
+                        if (event.x in (rx - 10)..(rx + itemW + 10) && event.y in (y - 10)..(y + itemH + 10)) {
                             collapse()
-                            postDelayed({ items[i].onClick() }, 250)
+                            postDelayed({ items[i].onClick() }, 200)
                             return true
                         }
                     }
                 }
-
-                // Outside everything — do NOT consume
-                if (expanded) collapse()
+                if (expanded) { collapse(); return true }
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!isDragging) return true // wait for threshold
-                val dx = event.rawX - initialTouchX
-                val dy = event.rawY - initialTouchY
-                if (abs(dx) > 10 || abs(dy) > 10) {
-                    isDragging = true
-                    lp?.x = (initialX - dx).toInt()
-                    lp?.y = (initialY + dy).toInt()
-                    wm?.updateViewLayout(this, lp)
+                if (triggerRect.contains(touchStartX, touchStartY) || isDragging) {
+                    if (!isDragging && (abs(dx) > 8 || abs(dy) > 8)) isDragging = true
+                    if (isDragging) {
+                        // Gravity.END: positive X = left, negative X = right
+                        lp?.x = (initialX - dx).toInt()
+                        lp?.y = (initialY + dy).toInt()
+                        try { wm?.updateViewLayout(this, lp) } catch (_: Exception) {}
+                        return true
+                    }
                 }
-                return true
+                return false
             }
             MotionEvent.ACTION_UP -> {
-                if (isDragging) {
-                    isDragging = false
-                    return true
-                }
-                if (triggerRect.contains(event.x, event.y)) {
-                    toggle()
-                    return true
-                }
+                if (isDragging) { isDragging = false; return true }
+                if (triggerRect.contains(event.x, event.y)) { toggle(); return true }
             }
         }
         return super.onTouchEvent(event)

@@ -289,8 +289,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun captureThen(ocrOnly: Boolean, livePass: Boolean = false) {
         val r = region ?: applyRegionPreset().also { region = it }
         if (!busy.compareAndSet(false, true)) return
+        // Hide all overlays BEFORE taking screenshot to avoid capturing toast/menu text
         menu?.visibility = View.INVISIBLE
-        if (!livePass) toast("⏳ Сканирую…")
+        // Delay to ensure overlays are hidden before grabbing screen
         handler.postDelayed({
             Thread {
                 try {
@@ -303,14 +304,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         val engine = EnginePrefs.ocr(this)
                         val lang = scanLang()
                         var text = router.read(piece, engine, lang).trim()
-                        // Post-process: collapse dots/exclamation, normalize spacing
+                        // Post-process with TextPostprocessor from Yomihon
                         text = TextPostprocessor().postprocess(text)
-                        // Filter out icon labels / badge noise (short ASCII-only junk)
-                        // but keep any line with Cyrillic (real Russian text) regardless of length
+                        // Filter out short/noise lines
                         text = text.lines().filter { line ->
                             if (line.isBlank()) return@filter false
                             val hasCyrillic = line.any { it in '\u0400'..'\u04FF' }
-                            val isAsciiOnly = line.all { it in 'A'..'z' || it.isDigit() || it == ' ' || it == '/' }
+                            val isAsciiOnly = line.all { it.isLetterOrDigit() || it.isWhitespace() || it == '/' }
                             hasCyrillic || (line.length > 4 && isAsciiOnly && line.count { it.isLetter() } > 2)
                         }.joinToString("\n")
                         if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
@@ -318,6 +318,14 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         if (!livePass) toast("✓ ${text.take(60)}")
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
+                        // Auto-select voice based on text linguistics
+                        Thread {
+                            val decision = VoiceAssistant.analyze(text, voiceKind)
+                            handler.post {
+                                applyVoiceDecision(decision)
+                                Log.i(TAG, "voice: ${decision.reason}")
+                            }
+                        }.start()
                         if (!ocrOnly) applyTranslate(text)
                     } finally { if (!piece.isRecycled) piece.recycle() }
                 } catch (e: Exception) {
@@ -326,7 +334,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     handler.post { menu?.visibility = View.VISIBLE }; busy.set(false)
                 }
             }.start()
-        }, 140)
+        }, 200) // Increased from 140 to 200ms to ensure overlays are hidden
     }
 
     /* ─────── Translate ─────── */
@@ -356,49 +364,16 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    /** Apply voice decision from VoiceAssistant. */
+    /** Apply voice decision from VoiceAssistant — changes voice kind, pitch, and rate. */
     private fun applyVoiceDecision(d: VoiceAssistant.VoiceDecision) {
         if (tts == null || !ttsReady) return
-        voiceKind = d.kind
-        safeApplyVoice()
         try {
+            voiceKind = d.kind
+            safeApplyVoice()
             tts?.setPitch(d.pitch)
             tts?.setSpeechRate(d.rate)
-        } catch (e: Exception) { Log.w(TAG, "pitch/rate failed", e) }
-    }
-
-    /** Fallback: pick voice/pitch based on detected speaker. */
-    private fun applyVoiceForSpeaker(speaker: VoiceKind) {
-        if (tts == null || !ttsReady) return
-        try {
-            when (speaker) {
-                VoiceKind.MALE -> {
-                    voiceKind = VoiceKind.MALE
-                    safeApplyVoice()
-                    tts?.setPitch(0.95f) // Slightly lower for male
-                    toast("Голос: мужской")
-                }
-                VoiceKind.FEMALE -> {
-                    voiceKind = VoiceKind.FEMALE
-                    safeApplyVoice()
-                    tts?.setPitch(1.05f) // Slightly higher for female
-                    toast("Голос: женский")
-                }
-                VoiceKind.TEEN -> {
-                    voiceKind = VoiceKind.MALE // Assume male teen for now
-                    safeApplyVoice()
-                    tts?.setPitch(1.15f) // Higher pitch for teen
-                    toast("Голос: подростковый")
-                }
-                else -> {
-                    voiceKind = VoiceKind.FEMALE // Default for narrator/other
-                    safeApplyVoice()
-                    tts?.setPitch(0.92f) // Narration tone
-                    toast("Голос: рассказчик")
-                }
-            }
-        } catch (e: Exception) { Log.w(TAG, "voice apply", e) }
-        tts?.setSpeechRate(0.96f)
+            Log.i(TAG, "voice applied: ${d.kind} pitch=${d.pitch} rate=${d.rate}")
+        } catch (e: Exception) { Log.w(TAG, "voice apply failed", e) }
     }
 
     /* ─────── Notifications ─────── */
