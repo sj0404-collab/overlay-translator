@@ -52,6 +52,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var menuLp: WindowManager.LayoutParams? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
+    private var faceAnalyzer: FaceAnalyzer? = null
     private var ttsReady = false
     private var ocr: OcrRouter? = null
     private var translator: Translator? = null
@@ -95,6 +96,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels; screenH = dm.heightPixels; density = dm.densityDpi
         Thread { ocr = OcrRouter(this); translator = Translator(this) }.start()
+        FaceAnalyzer.init(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -296,6 +298,24 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             Thread {
                 try {
                     val piece = grab(r) ?: return@Thread
+
+                        // Analyze faces for voice selection
+                        try {
+                            val faceAnalysis = faceAnalyzer?.analyze(piece)
+                            if (faceAnalysis != null && faceAnalysis.gender != FaceAnalyzer.Gender.UNKNOWN && faceAnalysis.faceCount > 0) {
+                                val newVoiceKind = when (faceAnalysis.gender) {
+                                    FaceAnalyzer.Gender.MALE -> VoiceKind.MALE
+                                    FaceAnalyzer.Gender.FEMALE -> VoiceKind.FEMALE
+                                    else -> voiceKind
+                                }
+                                voiceKind = newVoiceKind
+                                safeApplyVoice()
+                                val gLabel = when (faceAnalysis.gender) { FaceAnalyzer.Gender.MALE -> "мужской"; FaceAnalyzer.Gender.FEMALE -> "женский"; else -> "?" }
+                                handler.post { toast("Лиц: ${faceAnalysis.faceCount}, пол: $gLabel") }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "face analysis failed", e)
+                        }
                     try {
                         val h = PerceptualHash.of(piece)
                         if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread

@@ -61,4 +61,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")
+    implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.6")
 }
