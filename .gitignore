@@ -16,3 +16,6 @@ split_config.arm64_v8a.tar.xz
 *.jks
 *.keystore
 keystore.properties
+node_modules/
+web/dist/
+app/src/main/assets/tsx/

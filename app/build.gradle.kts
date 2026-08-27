@@ -113,7 +113,9 @@ dependencies {
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")
     implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
-    implementation("com.google.ai.edge.litert:litert:2.1.6")
+    // 2.1.0 is built with Kotlin 2.2 metadata, which is compatible with the
+    // Kotlin 2.0.21 Android compiler used by this project.
+    implementation("com.google.ai.edge.litert:litert:2.1.0")
 }
 
 tasks.named("preBuild").configure { dependsOn(prepareBundledCyrillicModels) }

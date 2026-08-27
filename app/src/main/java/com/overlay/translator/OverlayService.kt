@@ -55,7 +55,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var menuLp: WindowManager.LayoutParams? = null
     private var regionView: RegionView? = null
     private var tts: TextToSpeech? = null
-    private var faceAnalyzer: FaceAnalyzer? = null
     private var ttsReady = false
     private var ocr: OcrRouter? = null
     private var translator: Translator? = null
@@ -99,7 +98,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels; screenH = dm.heightPixels; density = dm.densityDpi
         Thread { ocr = OcrRouter(this); translator = Translator(this) }.start()
-        faceAnalyzer = FaceAnalyzer(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -260,25 +258,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 try {
                     val piece = grab(r) ?: return@Thread
 
-                    // Run face analysis for voice selection (non-blocking)
-                    var faceSummary = ""
-                    try {
-                        val fa = faceAnalyzer?.analyze(piece)
-                        if (fa != null && fa.gender != FaceAnalyzer.Gender.UNKNOWN && fa.faceCount > 0) {
-                            val newKind = when (fa.gender) {
-                                FaceAnalyzer.Gender.MALE -> VoiceKind.MALE
-                                FaceAnalyzer.Gender.FEMALE -> VoiceKind.FEMALE
-                                else -> voiceKind
-                            }
-                            voiceKind = newKind
-                            safeApplyVoice()
-                            val gl = if (fa.gender == FaceAnalyzer.Gender.MALE) "мужской" else "женский"
-                            faceSummary = " · лиц:$gl"
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "face analysis failed", e)
-                    }
-
                     try {
                         val h = PerceptualHash.of(piece)
                         if (livePass && PerceptualHash.isSimilar(h, lastHash)) return@Thread
@@ -297,7 +276,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         }.joinToString("\n")
                         if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
                         lastOcr = text; lastTr = ""
-                        if (!livePass) toast("✓ ${text.take(60)}$faceSummary")
+                        if (!livePass) toast("✓ ${text.take(60)}")
                         showLocalResult(text)
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
@@ -470,7 +449,6 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }
         DialogOverlay.dismiss()
         vdisplay?.release(); reader?.close(); projection?.stop()
-        faceAnalyzer?.close()
         try { tts?.shutdown() } catch (_: Exception) {}; ocr?.close()
         super.onDestroy()
     }
