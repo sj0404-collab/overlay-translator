@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { invoke, nativeState, type NativeState } from './native'
+import { invoke, nativeState, overlayState, type NativeState, type OverlayState } from './native'
 import './styles.css'
 
 type StepProps = {
@@ -94,4 +94,40 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+function OverlayPanel() {
+  const [state, setState] = useState<OverlayState>(overlayState)
+  const [result, setResult] = useState(state.text)
+
+  useEffect(() => {
+    window.onOverlayNativeState = (serialized) => {
+      try {
+        const next = JSON.parse(serialized) as OverlayState
+        setState(next)
+        if (next.text) setResult(next.text)
+      } catch { setState(overlayState()) }
+    }
+    window.onOverlayOcrResult = (text) => setResult(text)
+    return () => { window.onOverlayNativeState = undefined; window.onOverlayOcrResult = undefined }
+  }, [])
+
+  return (
+    <main className="overlay-shell">
+      <header className="overlay-header"><span className="live-dot" /> <b>Локальный OCR</b><small>{state.frame ? 'Рамка выбрана' : 'Выберите рамку'}</small></header>
+      <div className="overlay-actions">
+        <button onClick={() => invoke('pickFrame')}>Рамка</button>
+        <button className="scan" disabled={!state.frame || state.scanning} onClick={() => invoke('scanFrame')}>{state.scanning ? 'Читаю…' : 'Скан'}</button>
+        <button disabled={!result} onClick={() => invoke('speak')}>Голос</button>
+      </div>
+      <section className="ocr-result">
+        <p className="result-label">ТЕКСТ В РАМКЕ</p>
+        <p className={result ? 'result-text' : 'result-text muted'}>{result || 'Выберите рамку вокруг страницы или облачка, затем нажмите «Скан».'}</p>
+      </section>
+      <footer className="overlay-footer">
+        <button disabled={!result} onClick={() => invoke('copy')}>Копировать</button>
+        <button className="stop" onClick={() => invoke('stopOverlay')}>Стоп</button>
+      </footer>
+    </main>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(location.hash === '#overlay' ? <OverlayPanel /> : <App />)
