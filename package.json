@@ -1,0 +1,18 @@
+{
+  "name": "overlay-translator-ui",
+  "private": true,
+  "version": "6.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "vite": "5.4.14"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}

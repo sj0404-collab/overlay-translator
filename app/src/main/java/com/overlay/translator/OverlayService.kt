@@ -48,6 +48,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         private const val RESULT_NOTIF_ID = 10
         var projectionResultCode: Int = 0
         var projectionData: Intent? = null
+        @Volatile var isRunning: Boolean = false
     }
 
     private lateinit var wm: WindowManager
@@ -104,6 +105,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_START -> {
+                isRunning = true
                 live = EnginePrefs.live(this)
                 autoTranslate = EnginePrefs.autoTranslate(this)
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
@@ -443,6 +445,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        isRunning = false
         handler.removeCallbacks(tick)
         listOf(menu, regionView).forEach { v ->
             try { v?.let { wm.removeView(it) } } catch (_: Exception) {}

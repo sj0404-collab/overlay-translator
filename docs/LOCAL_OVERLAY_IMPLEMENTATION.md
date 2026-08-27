@@ -29,3 +29,11 @@ The default selection is the device content area with top/bottom system insets r
 The application must report a blank or low-quality result rather than invent a Russian sentence. A visual line-break hyphen is joined only when the source crop has a true adjacent OCR line boundary. Candidate recognition compares PP-OCRv3 and PP-OCRv5, and it preserves whole-line PP-OCRv5 candidates when their spaces can be reconstructed only from a restricted, verified word list.
 
 Every APK candidate has a Markdown release-quality report with its source commit, remote build link, known improvements, known failure modes, automated tests, and device-validation status. A successful build never by itself means that OCR quality is accepted.
+
+## Build compatibility note
+
+LiteRT 2.1.0 is compiled with Kotlin 2.2 metadata, so this project uses Kotlin 2.2.21 rather than the old Kotlin 1.9 baseline. The incompatibility and the need for a newer Kotlin compiler are documented by the LiteRT maintainers in [GitHub issue 4887][1].
+
+## References
+
+[1]: https://github.com/google-ai-edge/LiteRT/issues/4887 "LiteRT Kotlin-version compatibility discussion"
