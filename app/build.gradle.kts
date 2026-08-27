@@ -113,8 +113,8 @@ dependencies {
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")
     implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
-    // 2.1.0 is built with Kotlin 2.2 metadata, which is compatible with the
-    // Kotlin 2.0.21 Android compiler used by this project.
+    // 2.1.0 is built with Kotlin 2.2 metadata; the project compiles it with
+    // Kotlin 2.2.21 to keep the local LiteRT API binary-compatible.
     implementation("com.google.ai.edge.litert:litert:2.1.0")
 }
 
