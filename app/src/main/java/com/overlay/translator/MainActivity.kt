@@ -93,54 +93,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun wireOcr(b: TabOcrBinding) {
-        b.ocrGroup.setOnCheckedChangeListener(null)
-        b.regionModeGroup.setOnCheckedChangeListener(null)
-
-        when (EnginePrefs.ocr(this)) {
-            "openrouter" -> b.ocrOr.isChecked = true
-            "glens" -> b.ocrGlens.isChecked = true
-            "google" -> b.ocrGoogle.isChecked = true
-            else -> b.ocrZen.isChecked = true
-        }
-        when (EnginePrefs.regionMode(this)) {
-            "wide" -> b.regWide.isChecked = true
-            "screen" -> b.regScreen.isChecked = true
-            "bottom" -> b.regBottom.isChecked = true
-            else -> b.regRect.isChecked = true
-        }
-
-        b.autoTranslate.isChecked = EnginePrefs.autoTranslate(this)
-        b.autoTranslate.setOnCheckedChangeListener { _, v -> EnginePrefs.setAutoTranslate(this, v) }
-
-        b.googleModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, LlmClient.GEMINI_FREE)
-        b.googleModel.setSelection(LlmClient.GEMINI_FREE.indexOf(EnginePrefs.googleModel(this)).coerceAtLeast(0))
-        b.googleModel.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                EnginePrefs.setGoogleModel(this@MainActivity, LlmClient.GEMINI_FREE[pos])
-            }
-            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
-        }
-        b.googleKey.setText(EnginePrefs.googleApiKey(this))
-        b.googleKey.setOnFocusChangeListener { _, has ->
-            if (!has) EnginePrefs.setGoogleApiKey(this, b.googleKey.text.toString().trim())
-        }
-
-        b.ocrGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setOcr(this, when (id) {
-                b.ocrOr.id -> "openrouter"
-                b.ocrGlens.id -> "glens"
-                b.ocrGoogle.id -> "google"
-                else -> "zen"
-            })
-        }
-        b.regionModeGroup.setOnCheckedChangeListener { _, id ->
-            EnginePrefs.setRegionMode(this, when (id) {
-                b.regWide.id -> "wide"
-                b.regScreen.id -> "screen"
-                b.regBottom.id -> "bottom"
-                else -> "rect"
-            })
-        }
+        EnginePrefs.setOcr(this, "local_cyrillic")
+        EnginePrefs.setRegionMode(this, "rect")
+        EnginePrefs.setAutoTranslate(this, false)
     }
 
     private fun wireTr(b: TabTranslateBinding) {

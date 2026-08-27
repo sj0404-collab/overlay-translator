@@ -28,6 +28,9 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -59,7 +62,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var voiceKind = VoiceKind.FEMALE
     private var voiceName: String? = null
     private var region: RectF? = null
-    private var regionPreset = "rect" // rect | screen | wide | bottom
+    private var regionPreset = "rect" // Manual page frame only in local build.
     private var autoTranslate = false
     private var lastOcr = ""
     private var lastTr = ""
@@ -144,22 +147,11 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     private fun showMenu() {
         if (menu != null) return
-        regionPreset = EnginePrefs.regionMode(this)
         val items = listOf(
-            VerticalMenuView.VerticalItem("Скан (${regionLabel(regionPreset)})", "🔍") {
-                if (regionPreset == "rect") {
-                    if (region == null) startRegionPick() else captureThen(ocrOnly = !autoTranslate)
-                } else {
-                    region = applyRegionPreset()
-                    captureThen(ocrOnly = !autoTranslate)
-                }
+            VerticalMenuView.VerticalItem("Рамка страницы", "📐") { startRegionPick() },
+            VerticalMenuView.VerticalItem("Скан рамки", "🔍") {
+                if (region == null) startRegionPick() else captureThen(ocrOnly = true)
             },
-            VerticalMenuView.VerticalItem(
-                "Зона: ${regionLabel(regionPreset)}", "📐"
-            ) { cycleRegionPreset() },
-            VerticalMenuView.VerticalItem(
-                "Live ${if (autoTranslate) "+ Перевод" else ""}", if (live) "🟢" else "⚪"
-            ) { toggleLive() },
             VerticalMenuView.VerticalItem("Озвучить", "🔊") {
                 try {
                     if (ttsReady) {
@@ -209,40 +201,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         try { wm.addView(v, menuLp) } catch (e: Exception) { Log.e(TAG, "menu addView", e) }
     }
 
-    private fun regionLabel(p: String) = when (p) {
-        "rect" -> "область"; "screen" -> "экран"; "wide" -> "полоса"; "bottom" -> "низ"
-        else -> p
-    }
-
-    private fun applyRegionPreset(): RectF = when (regionPreset) {
-        "screen" -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat())
-        "wide" -> RectF(0f, screenH * 0.30f, screenW.toFloat(), screenH * 0.70f)
-        "bottom" -> RectF(0f, screenH * 0.55f, screenW.toFloat(), screenH * 0.92f)
-        else -> RectF(0f, 0f, screenW.toFloat(), screenH.toFloat()) // rect = full screen fallback
-    }
-
-    private fun toggleLive() {
-        live = !live; EnginePrefs.setLive(this, live)
-        autoTranslate = !autoTranslate; EnginePrefs.setAutoTranslate(this, autoTranslate)
-        menu?.collapse()
-        handler.postDelayed({ showMenu() }, 250)
-        toast(if (autoTranslate) "Live перевод: вкл" else "Live: ${if (live) "вкл" else "выкл"}")
-    }
-
-    private fun cycleRegionPreset() {
-        val presets = listOf("rect", "screen", "wide", "bottom")
-        val i = presets.indexOf(regionPreset).coerceAtLeast(0)
-        regionPreset = presets[(i + 1) % presets.size]
-        EnginePrefs.setRegionMode(this, regionPreset)
-        region = null // reset manual region
-        toast("Зона: ${regionLabel(regionPreset)}")
-        menu?.collapse()
-        handler.postDelayed({ showMenu() }, 250)
-    }
-
     /* Region selection */
     private fun startRegionPick() {
         if (regionView != null) return
+        DialogOverlay.dismiss()
         menu?.visibility = View.INVISIBLE
         val rv = RegionView(this); regionView = rv
         val lp = WindowManager.LayoutParams(
@@ -285,7 +247,12 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
 
     /* Capture screen and run OCR + face analysis + translation */
     private fun captureThen(ocrOnly: Boolean, livePass: Boolean = false) {
-        val r = region ?: applyRegionPreset().also { region = it }
+        // Never silently use the full display. The user must frame the actual
+        // reader page, so system chrome and overlay UI remain outside OCR.
+        val r = region ?: run {
+            if (!livePass) toast("Сначала выберите рамку страницы")
+            return
+        }
         if (!busy.compareAndSet(false, true)) return
         menu?.visibility = View.INVISIBLE
         handler.postDelayed({
@@ -331,6 +298,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         if (text.isBlank()) { if (!livePass) toast("(пусто)"); return@Thread }
                         lastOcr = text; lastTr = ""
                         if (!livePass) toast("✓ ${text.take(60)}$faceSummary")
+                        showLocalResult(text)
                         postResultNotification(text, "")
                         ScanHistory.add(this, text, "", engine)
                         // Auto voice selection based on text
@@ -350,6 +318,41 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 }
             }.start()
         }, 250)
+    }
+
+    /** Full result card for local OCR; the source bitmap has already been cropped to the user frame. */
+    private fun showLocalResult(text: String) {
+        handler.post {
+            val content = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(DialogOverlay.title(this@OverlayService, "Локальный OCR — рамка страницы"))
+                addView(ScrollView(this@OverlayService).apply {
+                    addView(TextView(this@OverlayService).apply {
+                        this.text = text
+                        setTextColor(0xFFF8FAFC.toInt())
+                        textSize = 18f
+                        setPadding(4, 8, 4, 14)
+                    })
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+                addView(LinearLayout(this@OverlayService).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    fun action(label: String, block: () -> Unit) = Button(this@OverlayService).apply {
+                        this.text = label
+                        textSize = 12f
+                        setOnClickListener { block() }
+                    }
+                    addView(action("Озвучить") { speakNow(text, true) }, LinearLayout.LayoutParams(0, 48, 1f))
+                    addView(action("Копировать") {
+                        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("local-ocr", text))
+                        toast("Скопировано")
+                    }, LinearLayout.LayoutParams(0, 48, 1f))
+                    addView(action("Рамка") { startRegionPick() }, LinearLayout.LayoutParams(0, 48, 1f))
+                    addView(action("Скрыть") { DialogOverlay.dismiss() }, LinearLayout.LayoutParams(0, 48, 1f))
+                })
+            }
+            DialogOverlay.show(this, wm, content, (screenH * 0.42f).toInt())
+        }
     }
 
     /* Translation */
