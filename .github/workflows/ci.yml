@@ -48,15 +48,42 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests, Android lint and debug packages
+      - name: Prepare release signing
+        shell: bash
+        env:
+          SIGNING_KEY_B64: ${{ secrets.SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_KEY_B64" || { echo "SIGNING_KEY is required for release packaging" >&2; exit 1; }
+          keystore="$RUNNER_TEMP/overlay-translator-release.keystore"
+          printf '%s' "$SIGNING_KEY_B64" | base64 --decode > "$keystore"
+          test -s "$keystore"
+          echo "SIGNING_STORE_FILE=$keystore" >> "$GITHUB_ENV"
+
+      - name: Unit tests, Android lint and signed release package
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: >-
           ./gradlew
           testDebugUnitTest
-          lintDebug
-          assembleDebug
-          bundleDebug
+          lintRelease
+          assembleRelease
+          bundleRelease
           --stacktrace
           --no-daemon
+
+      - name: Verify release APK only
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk"
+          test ! -e app/build/outputs/apk/debug/app-debug.apk
+          apksigner=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$apksigner"
+          "$apksigner" verify --verbose "$apk"
 
       - name: Render APK quality report
         shell: bash
@@ -71,8 +98,8 @@ jobs:
           |---|---|
           | Source commit | [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) |
           | Remote workflow | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |
-          | Build target | Debug APK/AAB candidate, ARM64 |
-          | Automated checks | Gradle wrapper validation, unit tests, Android lint and debug packages |
+          | Build target | Signed release APK/AAB candidate, ARM64 |
+          | Automated checks | Gradle wrapper validation, unit tests, release lint, release package and signing verification |
 
           EOF
           cat docs/releases/CURRENT.md >> "$report"
@@ -92,17 +119,17 @@ jobs:
           name: quality-reports-${{ github.run_number }}
           path: |
             app/build/reports/tests/
-            app/build/reports/lint-results-debug.html
-            app/build/reports/lint-results-debug.xml
+            app/build/reports/lint-results-release.html
+            app/build/reports/lint-results-release.xml
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload debug APK and AAB
+      - name: Upload signed release APK and AAB
         uses: actions/upload-artifact@v4
         with:
-          name: overlay-translator-debug-${{ github.sha }}
+          name: overlay-translator-release-${{ github.sha }}
           path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/bundle/debug/*.aab
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 14

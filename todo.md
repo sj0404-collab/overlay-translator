@@ -13,7 +13,7 @@
 
 ## Permanent release delivery
 
-- [ ] After every successful GitHub Actions release build, attach the versioned Markdown quality report and upload the APK candidate to GoFile with commit, run URL, architecture, SHA-256, and known limitations.
+- [x] After every successful GitHub Actions release build, attach the versioned Markdown quality report and upload the APK candidate to GoFile with commit, run URL, architecture, SHA-256, and known limitations.
 - [ ] Keep the GoFile upload as a test candidate until real-device validation confirms the overlay frame, local OCR, TSX controls, and Russian TTS.
 
 ## White-screen regression in hybrid APK
@@ -36,3 +36,10 @@
 - [x] Add a floating `Голос` action and a separate `Выбрать голос` action; the picker must show available Russian system voices and the current selection.
 - [x] Expose voice-list and voice-selection commands through the TSX/Android bridge, with a clear fallback when no Russian voice is installed.
 - [ ] Verify the floating controls remain usable without covering the selected OCR frame or result text.
+
+## Release-only delivery gate
+
+- [ ] Change CI from debug packaging to the signed `assembleRelease` variant and upload only `app-release.apk`.
+- [ ] Add a CI guard that fails if the selected artifact is `app-debug.apk`, an unsigned APK, or any non-release variant.
+- [ ] Record the release signing/build variant, commit, run URL, size, SHA-256, and known limitations in the Markdown report.
+- [ ] Replace the GoFile link only after the signed release APK passes the GitHub Actions gate; do not present the previous debug APK as a release again.
