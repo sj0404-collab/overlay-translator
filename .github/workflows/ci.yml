@@ -105,7 +105,7 @@ jobs:
           cat docs/releases/CURRENT.md >> "$report"
 
       - name: Upload APK quality report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apk-quality-report-${{ github.sha }}
           path: release-report/APK-QUALITY-REPORT-${{ github.sha }}.md
@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload test and lint reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-reports-${{ github.run_number }}
           path: |
@@ -125,7 +125,7 @@ jobs:
           retention-days: 14
 
       - name: Upload signed release APK and AAB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: overlay-translator-release-${{ github.sha }}
           path: |
