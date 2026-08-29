@@ -97,6 +97,7 @@ function App() {
 function OverlayPanel() {
   const [state, setState] = useState<OverlayState>(overlayState)
   const [result, setResult] = useState(state.text)
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
 
   useEffect(() => {
     window.onOverlayNativeState = (serialized) => {
@@ -116,7 +117,22 @@ function OverlayPanel() {
       <div className="overlay-actions">
         <button onClick={() => invoke('pickFrame')}>Рамка</button>
         <button className="scan" disabled={!state.frame || state.scanning} onClick={() => invoke('scanFrame')}>{state.scanning ? 'Читаю…' : 'Скан'}</button>
-        <button disabled={!result} onClick={() => invoke('speak')}>Голос</button>
+      </div>
+      <div className="voice-float" aria-label="Управление озвучиванием">
+        <button className="voice-float-button" disabled={!result} onClick={() => invoke('speak')} title="Озвучить текущий результат">🔊 Голос</button>
+        <button className="voice-picker-button" onClick={() => setVoicePickerOpen((open) => !open)} title="Выбрать системный голос">{state.selectedVoice ? 'Голос выбран' : 'Выбрать голос'}⌄</button>
+        {voicePickerOpen && (
+          <div className="voice-picker" role="dialog" aria-label="Выбор русского голоса">
+            <strong>Русские голоса</strong>
+            {!state.tts && <p className="voice-empty">Системная озвучка ещё не готова.</p>}
+            {state.tts && state.voices.length === 0 && <p className="voice-empty">Русские голоса не установлены.</p>}
+            {state.voices.map((voice) => (
+              <button key={voice.name} className={voice.selected ? 'voice-option selected' : 'voice-option'} onClick={() => { invoke('selectVoice', voice.name); setVoicePickerOpen(false) }}>
+                <span>{voice.label}</span><small>{voice.selected ? '✓' : ''}</small>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <section className="ocr-result">
         <p className="result-label">ТЕКСТ В РАМКЕ</p>

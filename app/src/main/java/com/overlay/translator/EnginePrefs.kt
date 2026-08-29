@@ -35,6 +35,8 @@ object EnginePrefs {
     fun setAutoTranslate(ctx: Context, v: Boolean) = Unit
     fun speak(ctx: Context) = sp(ctx).getBoolean("speak", true)
     fun setSpeak(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("speak", v).apply()
+    fun voiceName(ctx: Context) = sp(ctx).getString("voice_name", "") ?: ""
+    fun setVoiceName(ctx: Context, v: String) = sp(ctx).edit().putString("voice_name", v).apply()
 
     fun scanLang(ctx: Context) = "RU"
     fun setScanLang(ctx: Context, v: String) = Unit

@@ -22,3 +22,17 @@
 - [ ] Verify that the packaged `tsx/index.html`, JavaScript bundle, CSS, and WebView hash route are present and load from Android assets.
 - [ ] Add a visible native fallback/error state when the TSX page fails to load instead of leaving a blank screen.
 - [ ] Add a startup regression check to the remote GitHub Actions build and upload a new APK candidate only after it passes.
+
+## Floating voice control
+
+- [x] Keep the requested overlay actions visible: choose/change frame, scan, copy, hide/stop, and status feedback.
+- [x] Remove `Голос` from the result-card action row.
+- [x] Add a separate floating voice button above the OCR result card; it must speak the current result, remain visible while text exists, and be disabled when there is no result.
+- [ ] Verify the floating button does not cover the selected frame or OCR text on portrait screens.
+
+## Floating voice picker
+
+- [x] Remove voice selection controls from the OCR result card and place them in a separate floating control group above it.
+- [x] Add a floating `Голос` action and a separate `Выбрать голос` action; the picker must show available Russian system voices and the current selection.
+- [x] Expose voice-list and voice-selection commands through the TSX/Android bridge, with a clear fallback when no Russian voice is installed.
+- [ ] Verify the floating controls remain usable without covering the selected OCR frame or result text.

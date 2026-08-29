@@ -31,6 +31,7 @@ import android.widget.TextView
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -111,6 +112,8 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 voiceKind = runCatching { VoiceKind.valueOf(intent.getStringExtra(EXTRA_VOICE) ?: "FEMALE") }
                     .getOrDefault(VoiceKind.FEMALE)
                 voiceName = intent.getStringExtra(EXTRA_VOICE_NAME)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: EnginePrefs.voiceName(this).takeIf { it.isNotBlank() }
                 if (ttsReady) safeApplyVoice()
                 bindProjection()
                 showMenu()
@@ -174,7 +177,19 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         put("scanning", busy.get())
         put("tts", ttsReady)
         put("text", lastTr.ifBlank { lastOcr })
+        put("selectedVoice", voiceName ?: "")
+        put("voices", voiceOptionsJson())
     }.toString()
+
+    private fun voiceOptionsJson(): JSONArray = JSONArray().apply {
+        VoiceHelper.russianVoices(tts).forEach { voice ->
+            put(JSONObject().apply {
+                put("name", voice.name)
+                put("label", "${voice.name} · ${voice.locale.toLanguageTag()}")
+                put("selected", voice.name == voiceName)
+            })
+        }
+    }
 
     private fun publishOverlayState() {
         val serialized = JSONObject.quote(overlayStateJson())
@@ -193,6 +208,21 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         @JavascriptInterface fun speak() = handler.post {
             val text = lastTr.ifBlank { lastOcr }
             if (text.isBlank()) toast("Сначала выполните OCR") else speakNow(text, true)
+        }
+
+        @JavascriptInterface fun listVoices(): String = voiceOptionsJson().toString()
+
+        @JavascriptInterface fun selectVoice(name: String) = handler.post {
+            val available = VoiceHelper.russianVoices(tts).any { it.name == name }
+            if (!available) {
+                toast("Русский голос не найден")
+                return@post
+            }
+            voiceName = name
+            EnginePrefs.setVoiceName(this@OverlayService, name)
+            if (ttsReady) safeApplyVoice()
+            publishOverlayState()
+            toast("Голос выбран")
         }
 
         @JavascriptInterface fun copy() = handler.post {
@@ -404,6 +434,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             tts?.language = Locale("ru", "RU")
             safeApplyVoice()
             toast("TTS: ${tts?.defaultEngine ?: "ok"}")
+            publishOverlayState()
         } else { ttsReady = false; Log.w(TAG, "TTS init: $status") }
     }
 

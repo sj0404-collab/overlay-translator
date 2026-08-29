@@ -4,11 +4,19 @@ export type NativeState = {
   running: boolean
 }
 
+export type VoiceOption = {
+  name: string
+  label: string
+  selected: boolean
+}
+
 export type OverlayState = {
   frame: boolean
   scanning: boolean
   tts: boolean
   text: string
+  voices: VoiceOption[]
+  selectedVoice: string
 }
 
 type OverlayNative = {
@@ -20,6 +28,8 @@ type OverlayNative = {
   pickFrame: () => void
   scanFrame: () => void
   speak: () => void
+  listVoices: () => string
+  selectVoice: (name: string) => void
   copy: () => void
 }
 
@@ -40,13 +50,23 @@ export function nativeState(): NativeState {
 }
 
 export function overlayState(): OverlayState {
+  const fallback: OverlayState = { frame: false, scanning: false, tts: false, text: '', voices: [], selectedVoice: '' }
   try {
-    return JSON.parse(window.OverlayNative?.state() ?? '{}') as OverlayState
+    const parsed = JSON.parse(window.OverlayNative?.state() ?? '{}') as Partial<OverlayState>
+    return {
+      ...fallback,
+      ...parsed,
+      voices: Array.isArray(parsed.voices) ? parsed.voices : [],
+      selectedVoice: parsed.selectedVoice ?? '',
+    }
   } catch {
-    return { frame: false, scanning: false, tts: false, text: '' }
+    return fallback
   }
 }
 
-export function invoke(action: keyof Omit<OverlayNative, 'state'>) {
-  window.OverlayNative?.[action]?.()
+export function invoke(action: keyof Omit<OverlayNative, 'state'>, value?: string) {
+  const fn = window.OverlayNative?.[action]
+  if (!fn) return
+  if (value === undefined) (fn as () => void)()
+  else (fn as (value: string) => void)(value)
 }
