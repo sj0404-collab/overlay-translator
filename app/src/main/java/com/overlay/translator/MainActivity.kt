@@ -7,7 +7,10 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.webkit.JavascriptInterface
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +24,8 @@ import org.json.JSONObject
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
+    private lateinit var siteWeb: WebView
+    private lateinit var urlField: android.widget.EditText
 
     private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
@@ -42,6 +47,71 @@ class MainActivity : AppCompatActivity() {
         web.webViewClient = WebViewClient()
         web.addJavascriptInterface(OverlayNativeBridge(), "OverlayNative")
         web.loadUrl("file:///android_asset/tsx/index.html")
+
+        siteWeb = findViewById(R.id.siteWeb)
+        with(siteWeb.settings) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = false
+            allowContentAccess = true
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
+        }
+        siteWeb.webViewClient = WebViewClient()
+
+        urlField = findViewById(R.id.urlField)
+        urlField.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO) { openUrl(urlField.text.toString()); true } else false
+        }
+        findViewById<View>(R.id.goBtn).setOnClickListener { openUrl(urlField.text.toString()) }
+
+        findViewById<View>(R.id.tabFrame).setOnClickListener { showScreen("frame") }
+        findViewById<View>(R.id.tabSite).setOnClickListener { showScreen("site") }
+    }
+
+    private fun showScreen(which: String) {
+        val frame = findViewById<View>(R.id.screenFrame)
+        val site = findViewById<View>(R.id.screenSite)
+        val tabFrame = findViewById<android.widget.Button>(R.id.tabFrame)
+        val tabSite = findViewById<android.widget.Button>(R.id.tabSite)
+        val on = "#EAF2FF"
+        val off = "#8EA6C8"
+        if (which == "site") {
+            frame.visibility = View.GONE
+            site.visibility = View.VISIBLE
+            tabSite.setTextColor(android.graphics.Color.parseColor(on))
+            tabFrame.setTextColor(android.graphics.Color.parseColor(off))
+        } else {
+            site.visibility = View.GONE
+            frame.visibility = View.VISIBLE
+            tabFrame.setTextColor(android.graphics.Color.parseColor(on))
+            tabSite.setTextColor(android.graphics.Color.parseColor(off))
+        }
+    }
+
+    override fun onBackPressed() {
+        if (siteWeb.visibility == View.VISIBLE && siteWeb.canGoBack()) {
+            siteWeb.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun openUrl(raw: String) {
+        val q = raw.trim()
+        if (q.isEmpty()) return
+        val url = when {
+            q.startsWith("http://") || q.startsWith("https://") || q.startsWith("file://") -> q
+            q.split(' ').size > 1 -> "https://www.google.com/search?q=${Uri.encode(q)}"
+            Regex("^[\\p{L}\\d-]+\\.[\\p{L}]{2,}([/:#?].*)?$").matches(q) -> "https://$q"
+            else -> "https://www.google.com/search?q=${Uri.encode(q)}"
+        }
+        urlField.setText(url)
+        siteWeb.loadUrl(url)
     }
 
     override fun onResume() {
