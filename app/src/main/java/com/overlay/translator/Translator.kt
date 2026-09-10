@@ -8,12 +8,14 @@ import android.content.Context
  * so the APK stays small (no bundled TSV data / ML Kit model).
  */
 class Translator(private val ctx: Context) {
+    private val dictionary by lazy { LocalDictionary(ctx) }
 
     fun translate(text: String, engine: String): String {
         val cleaned = text.replace(Regex("\\s+"), " ").trim()
         if (cleaned.isEmpty()) return ""
         if (ScriptDetect.isMostlyCyrillic(cleaned)) return cleaned
         return when (engine) {
+            "dict" -> dictionary.translateFragment(cleaned)
             "google" -> MangaTranslatorService.translate(cleaned)
             "googleai" -> LlmClient.translateGemini(ctx, cleaned)
                 ?: MangaTranslatorService.translate(cleaned)

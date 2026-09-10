@@ -177,6 +177,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         put("scanning", busy.get())
         put("tts", ttsReady)
         put("text", lastTr.ifBlank { lastOcr })
+        put("source", lastOcr)
         put("selectedVoice", voiceName ?: "")
         put("voices", voiceOptionsJson())
     }.toString()
@@ -202,7 +203,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         @JavascriptInterface fun pickFrame() = handler.post { startRegionPick() }
 
         @JavascriptInterface fun scanFrame() = handler.post {
-            if (region == null) startRegionPick() else captureThen(ocrOnly = true)
+            if (region == null) startRegionPick() else captureThen(ocrOnly = false)
         }
 
         @JavascriptInterface fun speak() = handler.post {

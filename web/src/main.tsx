@@ -97,6 +97,7 @@ function App() {
 function OverlayPanel() {
   const [state, setState] = useState<OverlayState>(overlayState)
   const [result, setResult] = useState(state.text)
+  const [source, setSource] = useState('')
   const [voicePickerOpen, setVoicePickerOpen] = useState(false)
 
   useEffect(() => {
@@ -104,10 +105,11 @@ function OverlayPanel() {
       try {
         const next = JSON.parse(serialized) as OverlayState
         setState(next)
+        if (next.source) setSource(next.source)
         if (next.text) setResult(next.text)
       } catch { setState(overlayState()) }
     }
-    window.onOverlayOcrResult = (text) => setResult(text)
+    window.onOverlayOcrResult = (text) => { setResult(text); setSource(text) }
     return () => { window.onOverlayNativeState = undefined; window.onOverlayOcrResult = undefined }
   }, [])
 
@@ -136,6 +138,7 @@ function OverlayPanel() {
       </div>
       <section className="ocr-result">
         <p className="result-label">ТЕКСТ В РАМКЕ</p>
+        {source && source !== result && <p className="result-text source-text">{source}</p>}
         <p className={result ? 'result-text' : 'result-text muted'}>{result || 'Выберите рамку вокруг страницы или облачка, затем нажмите «Скан».'}</p>
       </section>
       <footer className="overlay-footer">

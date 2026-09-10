@@ -15,6 +15,7 @@ export type OverlayState = {
   scanning: boolean
   tts: boolean
   text: string
+  source: string
   voices: VoiceOption[]
   selectedVoice: string
 }
@@ -50,12 +51,13 @@ export function nativeState(): NativeState {
 }
 
 export function overlayState(): OverlayState {
-  const fallback: OverlayState = { frame: false, scanning: false, tts: false, text: '', voices: [], selectedVoice: '' }
+  const fallback: OverlayState = { frame: false, scanning: false, tts: false, text: '', source: '', voices: [], selectedVoice: '' }
   try {
     const parsed = JSON.parse(window.OverlayNative?.state() ?? '{}') as Partial<OverlayState>
     return {
       ...fallback,
       ...parsed,
+      source: parsed.source ?? '',
       voices: Array.isArray(parsed.voices) ? parsed.voices : [],
       selectedVoice: parsed.selectedVoice ?? '',
     }

@@ -24,7 +24,7 @@ object EnginePrefs {
     fun zenModel(ctx: Context) = sp(ctx).getString("zen_model", "") ?: ""
     fun setZenModel(ctx: Context, v: String) = sp(ctx).edit().putString("zen_model", v).apply()
 
-    fun tr(ctx: Context) = "off"
+    fun tr(ctx: Context) = "dict"
     fun setTr(ctx: Context, v: String) = Unit
     fun trTargetLang(ctx: Context) = "ru"
     fun setTrTargetLang(ctx: Context, v: String) = Unit
