@@ -30,14 +30,16 @@
 - [x] Keep the requested overlay actions visible: choose/change frame, scan, copy, hide/stop, and status feedback.
 - [x] Remove `Голос` from the result-card action row.
 - [x] Add a separate floating voice button above the OCR result card; it must speak the current result, remain visible while text exists, and be disabled when there is no result.
-- [ ] Verify the floating button does not cover the selected frame or OCR text on portrait screens.
+- [x] User reverted to the earlier native floating overlay: `OverlayService` now shows the draggable SAO-style trigger menu (`VerticalMenuView`) with `Рамка страницы`, `Скан рамки`, `Озвучить`, `Выбор голоса`, `Копировать`, `История`, `Стоп`. The TSX `#overlay` panel and the TSX/WebView bridge are no longer used by the overlay service.
+- [ ] Verify on a real device that the floating trigger menu does not cover the selected frame or OCR text on portrait screens.
 
 ## Floating voice picker
 
 - [x] Remove voice selection controls from the OCR result card and place them in a separate floating control group above it.
 - [x] Add a floating `Голос` action and a separate `Выбрать голос` action; the picker must show available Russian system voices and the current selection.
 - [x] Expose voice-list and voice-selection commands through the TSX/Android bridge, with a clear fallback when no Russian voice is installed.
-- [ ] Verify the floating controls remain usable without covering the selected OCR frame or result text.
+- [x] With the native floating menu restored, voice selection is the native `VoiceDialog` (lists Russian system voices, preview, apply), with a fallback dialog when no Russian voice is installed.
+- [ ] Verify the native floating controls remain usable without covering the selected OCR frame or result text.
 
 ## Release-only delivery gate
 

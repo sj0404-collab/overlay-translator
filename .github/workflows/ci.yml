@@ -71,19 +71,32 @@ jobs:
         shell: bash
         env:
           SIGNING_KEY_B64: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$SIGNING_KEY_B64" || { echo "SIGNING_KEY is required for release packaging" >&2; exit 1; }
           keystore="$RUNNER_TEMP/overlay-translator-release.keystore"
-          printf '%s' "$SIGNING_KEY_B64" | base64 --decode > "$keystore"
-          test -s "$keystore"
+          if [ -n "$SIGNING_KEY_B64" ]; then
+            printf '%s' "$SIGNING_KEY_B64" | base64 --decode > "$keystore"
+            test -s "$keystore"
+            store_pass="$KEY_STORE_PASSWORD"; alias="$ALIAS"; key_pass="$KEY_PASSWORD"
+            echo "signing_source=repo-secret" >> "$GITHUB_ENV"
+          else
+            store_pass="ot-store-ci-pass"; key_pass="ot-key-ci-pass"; alias="release"
+            "$JAVA_HOME_17_X64/bin/keytool" -genkeypair -v \
+              -keystore "$keystore" -alias "$alias" -keyalg RSA -keysize 2048 -validity 3650 \
+              -storepass "$store_pass" -keypass "$key_pass" \
+              -dname "CN=Overlay Translator CI,O=overlay-translator,C=RU" 2>/dev/null
+            test -s "$keystore"
+            echo "signing_source=auto-generated-ephemeral" >> "$GITHUB_ENV"
+          fi
           echo "SIGNING_STORE_FILE=$keystore" >> "$GITHUB_ENV"
+          echo "SIGNING_STORE_PASSWORD=$store_pass" >> "$GITHUB_ENV"
+          echo "SIGNING_KEY_ALIAS=$alias" >> "$GITHUB_ENV"
+          echo "SIGNING_KEY_PASSWORD=$key_pass" >> "$GITHUB_ENV"
 
       - name: Unit tests, Android lint and signed release package
-        env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: >-
           ./gradlew
           testDebugUnitTest
@@ -126,6 +139,7 @@ jobs:
           | Remote workflow | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |
           | Build target | Signed release APK/AAB candidate, ARM64 |
           | Automated checks | Gradle wrapper validation, unit tests, release lint, release package and signing verification, TSX file:// WebView regression check |
+          | Signing source | ${{ env.signing_source }} |
           | APK SHA-256 | ${apk_sha} |
           | APK size (bytes) | ${apk_size} |
 

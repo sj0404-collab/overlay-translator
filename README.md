@@ -75,9 +75,11 @@ Android-оверлей для цепочки **область экрана → O
 - Gradle-задача `verifyTsxShell` падает, если собрать APK без TSX-оболочки или с ES-модулями.
 - CI проверяет оболочку перед сборкой APK.
 
-## Подписанный релиз
+## Подписанный release и CI без секретов
 
-В `Settings → Secrets and variables → Actions` добавьте:
+Android CI больше не требует зашитых секретов: если `SIGNING_KEY` не задан, workflow сам генерирует временный keystore на раннере и подписывает им release APK (в отчёте указан `signing_source = auto-generated-ephemeral`). Такой APK ставится на телефон, но его подпись непостоянна — для обновлений поверх старого APK нужен тот же ключ.
+
+Для стабильной длительной подписи добавьте в `Settings → Secrets and variables → Actions` (для тег-релизов из `release.yml`):
 
 - `SIGNING_KEYSTORE_BASE64` — keystore, закодированный Base64;
 - `SIGNING_STORE_PASSWORD`;
