@@ -83,11 +83,11 @@ jobs:
             store_pass="$KEY_STORE_PASSWORD"; alias="$ALIAS"; key_pass="$KEY_PASSWORD"
             echo "signing_source=repo-secret" >> "$GITHUB_ENV"
           else
-            store_pass="ot-store-ci-pass"; key_pass="ot-key-ci-pass"; alias="release"
+            store_pass="ot-store-ci-pass"; key_pass="$store_pass"; alias="release"
             "$JAVA_HOME_17_X64/bin/keytool" -genkeypair -v \
               -keystore "$keystore" -alias "$alias" -keyalg RSA -keysize 2048 -validity 3650 \
-              -storepass "$store_pass" -keypass "$key_pass" \
-              -dname "CN=Overlay Translator CI,O=overlay-translator,C=RU" 2>/dev/null
+              -storetype JKS -storepass "$store_pass" -keypass "$key_pass" \
+              -dname "CN=Overlay Translator CI,O=overlay-translator,C=RU"
             test -s "$keystore"
             echo "signing_source=auto-generated-ephemeral" >> "$GITHUB_ENV"
           fi
