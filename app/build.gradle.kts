@@ -34,6 +34,23 @@ fun sha256(file: java.io.File): String = file.inputStream().use { input ->
     digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+val verifyTsxShell by tasks.registering {
+    group = "verification"
+    description = "Fails the build when the packaged TSX shell is missing or was not rebuilt for file:// WebView."
+    val tsxIndex = layout.projectDirectory.file("src/main/assets/tsx/index.html")
+    inputs.file(tsxIndex)
+    doLast {
+        val file = tsxIndex.asFile
+        check(file.isFile) {
+            "Packaged TSX shell is missing: ${file.path}. Run `pnpm run build` from the repository root before building the APK."
+        }
+        val html = file.readText()
+        check(!html.contains("type=\"module\"")) {
+            "Packaged TSX shell still uses an ES module script, which does not load from file:// and blanks the WebView (white-screen regression). Rebuild with `pnpm run build`."
+        }
+    }
+}
+
 val prepareBundledCyrillicModels by tasks.registering {
     group = "distribution"
     description = "Downloads and verifies the pinned local Cyrillic PP-OCR assets for the APK."
@@ -118,4 +135,5 @@ dependencies {
     implementation("com.google.ai.edge.litert:litert:2.1.0")
 }
 
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(verifyTsxShell) }
 tasks.named("preBuild").configure { dependsOn(prepareBundledCyrillicModels) }

@@ -45,6 +45,25 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
+      - name: Verify packaged TSX shell for file:// WebView
+        shell: bash
+        run: |
+          set -euo pipefail
+          shell_dir="app/src/main/assets/tsx"
+          test -f "$shell_dir/index.html"
+          if grep -q 'type="module"' "$shell_dir/index.html"; then
+            echo "TSX shell still uses an ES module script, which does not load from file:// (white-screen regression)" >&2
+            exit 1
+          fi
+          if grep -q 'crossorigin' "$shell_dir/index.html"; then
+            echo "TSX shell still references crossorigin assets, unsafe for file:// WebView" >&2
+            exit 1
+          fi
+          grep -q '__tsxMounted' "$shell_dir/index.html"
+          for asset in $(grep -oE '\./assets/[^"'"'"')]+' "$shell_dir/index.html" | sort -u); do
+            test -f "$shell_dir/${asset#./}"
+          done
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
@@ -91,6 +110,13 @@ jobs:
           set -euo pipefail
           mkdir -p release-report
           report="release-report/APK-QUALITY-REPORT-${GITHUB_SHA}.md"
+          apk="app/build/outputs/apk/release/app-release.apk"
+          apk_sha="n/a"
+          apk_size="n/a"
+          if [ -f "$apk" ]; then
+            apk_sha="$(sha256sum "$apk" | cut -d' ' -f1)"
+            apk_size="$(stat -c %s "$apk")"
+          fi
           cat > "$report" <<EOF
           # APK quality report — ${GITHUB_SHA}
 
@@ -99,7 +125,9 @@ jobs:
           | Source commit | [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) |
           | Remote workflow | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |
           | Build target | Signed release APK/AAB candidate, ARM64 |
-          | Automated checks | Gradle wrapper validation, unit tests, release lint, release package and signing verification |
+          | Automated checks | Gradle wrapper validation, unit tests, release lint, release package and signing verification, TSX file:// WebView regression check |
+          | APK SHA-256 | ${apk_sha} |
+          | APK size (bytes) | ${apk_size} |
 
           EOF
           cat docs/releases/CURRENT.md >> "$report"

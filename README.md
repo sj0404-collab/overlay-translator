@@ -55,12 +55,25 @@ Android-оверлей для цепочки **область экрана → O
 Локальная сборка не требуется. Workflow `.github/workflows/ci.yml` на каждом push/PR выполняет:
 
 1. проверку Gradle Wrapper;
-2. JVM unit tests;
-3. Android Lint;
-4. сборку debug APK и AAB;
-5. загрузку пакетов и отчётов в Artifacts.
+2. сборку пакетированного TSX-интерфейса и его регресс-проверку для `file://` WebView;
+3. JVM unit tests;
+4. Android Lint;
+5. сборку **подписанного** release APK и AAB;
+6. проверку подписи, что артефакт — только release;
+7. загрузку пакетов и отчётов в Artifacts.
 
-Откройте вкладку **Actions**, выберите успешный запуск **Android CI** и скачайте `overlay-translator-debug-*`.
+Откройте вкладку **Actions**, выберите успешный запуск **Android CI** и скачайте `overlay-translator-release-*`.
+
+## Почему интерфейс прежде был белым и как это исправлено
+
+Раньше `tsx/index.html` после сборки Vite содержал `<script type="module" crossorigin>`. Такой ES-модуль не загружается из `file:///android_asset/` в Android WebView (CORS: origin `null`), поэтому вместо интерфейса оставался пустой белый экран. Плюс тег-сборки вообще не собирали TSX-ассеты: `app/src/main/assets/tsx/` в git не хранится.
+
+Теперь:
+
+- `pnpm run build` дополнительно запускает `tools/postbuild.mjs`, который переписывает бандл в обычный `<script defer>` без `crossorigin` и добавляет сторожевой скрипт, показывающий видимую ошибку, если React не смонтировался.
+- `MainActivity` показывает нативный fallback («Не удалось загрузить локальный интерфейс» с кнопкой «Повторить») вместо белого экрана.
+- Gradle-задача `verifyTsxShell` падает, если собрать APK без TSX-оболочки или с ES-модулями.
+- CI проверяет оболочку перед сборкой APK.
 
 ## Подписанный релиз
 

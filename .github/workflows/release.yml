@@ -43,6 +43,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Node for TSX shell
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build packaged TSX interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm run build
+          test -f app/src/main/assets/tsx/index.html
+          if grep -q 'type="module"' app/src/main/assets/tsx/index.html; then
+            echo "Packaged TSX shell still uses ES modules, which blank file:// WebViews" >&2
+            exit 1
+          fi
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 

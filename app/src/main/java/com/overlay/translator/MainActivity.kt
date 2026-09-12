@@ -35,6 +35,36 @@ class MainActivity : AppCompatActivity() {
         publishNativeState()
     }
 
+    private fun loadTsx() {
+        findViewById<View>(R.id.tsxFallback).visibility = View.GONE
+        web.visibility = View.VISIBLE
+        web.loadUrl("file:///android_asset/tsx/index.html")
+        web.postDelayed({ verifyTsxMounted() }, 3000)
+    }
+
+    /** Reveals a native error state when the TSX page exists but React never mounted. */
+    private fun verifyTsxMounted() {
+        if (findViewById<View>(R.id.tsxFallback).visibility == View.VISIBLE) return
+        web.evaluateJavascript(
+            "Boolean(window.__tsxMounted ? window.__tsxMounted() : (document.querySelector('.shell') || document.querySelector('.overlay-shell')))",
+        ) { mounted ->
+            runOnUiThread {
+                if (mounted == "true") return@runOnUiThread
+                // One retry before declaring failure so slow first loads are not a false error.
+                web.postDelayed({
+                    web.evaluateJavascript(
+                        "Boolean(window.__tsxMounted ? window.__tsxMounted() : (document.querySelector('.shell') || document.querySelector('.overlay-shell')))",
+                    ) { again -> if (again != "true") showTsxFallback() }
+                }, 4000)
+            }
+        }
+    }
+
+    private fun showTsxFallback() {
+        web.visibility = View.GONE
+        findViewById<View>(R.id.tsxFallback).visibility = View.VISIBLE
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,9 +74,19 @@ class MainActivity : AppCompatActivity() {
         web.settings.domStorageEnabled = false
         web.settings.allowFileAccess = true
         web.settings.allowContentAccess = false
-        web.webViewClient = WebViewClient()
+        web.setBackgroundColor(android.graphics.Color.rgb(8, 17, 30))
+        web.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView,
+                request: android.webkit.WebResourceRequest,
+                error: android.webkit.WebResourceError,
+            ) {
+                if (request.isForMainFrame) runOnUiThread { showTsxFallback() }
+            }
+        }
         web.addJavascriptInterface(OverlayNativeBridge(), "OverlayNative")
-        web.loadUrl("file:///android_asset/tsx/index.html")
+        loadTsx()
+        findViewById<View>(R.id.tsxRetry).setOnClickListener { loadTsx() }
 
         siteWeb = findViewById(R.id.siteWeb)
         with(siteWeb.settings) {

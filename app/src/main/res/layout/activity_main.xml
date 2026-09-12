@@ -49,6 +49,50 @@
             android:id="@+id/tsxWeb"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:id="@+id/tsxFallback"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Не удалось загрузить локальный интерфейс"
+                android:textColor="#EAF2FF"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:letterSpacing="0.02"
+                android:text="Встроенный TSX-интерфейс не запустился. Нажмите «Повторить» или переустановите APK."
+                android:textColor="#A8B8D2"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/tsxRetry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:backgroundTint="#A6C1FF"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="26dp"
+                android:paddingVertical="12dp"
+                android:text="Повторить"
+                android:textColor="#06172B"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </FrameLayout>
 
     <LinearLayout

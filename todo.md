@@ -19,9 +19,11 @@
 ## White-screen regression in hybrid APK
 
 - [ ] Reproduce the blank white WebView on the device using candidate `6a574db`.
-- [ ] Verify that the packaged `tsx/index.html`, JavaScript bundle, CSS, and WebView hash route are present and load from Android assets.
-- [ ] Add a visible native fallback/error state when the TSX page fails to load instead of leaving a blank screen.
-- [ ] Add a startup regression check to the remote GitHub Actions build and upload a new APK candidate only after it passes.
+- [x] Root cause: the packaged `tsx/index.html` (Vite output) used `<script type="module" crossorigin>`, and ES modules are CORS-blocked from `file://` in the WebView, so the app shell never mounts. Tag/release builds additionally never built the TSX assets at all because `app/src/main/assets/tsx/` is gitignored. The Gradle `preBuild` task now fails when the shell is missing or still uses ES modules.
+- [x] Verify that the packaged `tsx/index.html`, JavaScript bundle, CSS, and WebView hash route are present and load from Android assets.
+- [x] Fix: `tools/postbuild.mjs` rewrites the build to a classic `<script defer>` (no modules, no `crossorigin`) so the shell loads from `file:///android_asset/tsx/index.html`, and injects a watchdog that shows a visible error if React never mounts.
+- [x] Add a visible native fallback/error state when the TSX page fails to load instead of leaving a blank screen (`tsxFallback` view with retry in `MainActivity`).
+- [x] Add a startup regression check to the remote GitHub Actions build (classic script, no modules/crossorigin, assets present, watchdog injected) and upload a new APK candidate only after it passes.
 
 ## Floating voice control
 
@@ -39,7 +41,7 @@
 
 ## Release-only delivery gate
 
-- [ ] Change CI from debug packaging to the signed `assembleRelease` variant and upload only `app-release.apk`.
-- [ ] Add a CI guard that fails if the selected artifact is `app-debug.apk`, an unsigned APK, or any non-release variant.
-- [ ] Record the release signing/build variant, commit, run URL, size, SHA-256, and known limitations in the Markdown report.
+- [x] Change CI from debug packaging to the signed `assembleRelease` variant and upload only `app-release.apk`.
+- [x] Add a CI guard that fails if the selected artifact is `app-debug.apk`, an unsigned APK, or any non-release variant.
+- [x] Record the release signing/build variant, commit, run URL, size, SHA-256, and known limitations in the Markdown report.
 - [ ] Replace the GoFile link only after the signed release APK passes the GitHub Actions gate; do not present the previous debug APK as a release again.
