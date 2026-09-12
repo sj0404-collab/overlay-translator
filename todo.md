@@ -41,6 +41,14 @@
 - [x] With the native floating menu restored, voice selection is the native `VoiceDialog` (lists Russian system voices, preview, apply), with a fallback dialog when no Russian voice is installed.
 - [ ] Verify the native floating controls remain usable without covering the selected OCR frame or result text.
 
+## Edge TTS + voice roles
+
+- [x] Add `EdgeTts` client (OkHttp WebSocket + SSML): voice-list fetch/cache and MP3 synthesis, same protocol as `edge-tts`, no API key. `INTERNET` permission added.
+- [x] Add `VoiceRoles` model: narrator / male / female / child roles, each bound to a voice (`sys:<name>` system TTS or `edge:<ShortName>` Edge voice) or auto (resolved by marker or `VoiceAssistant` gender); persisted in `SharedPreferences`.
+- [x] Add `VoiceRoleDialog` (native overlay): per-role voice assignment via unified catalog (auto + system Russian voices + Edge voices), gender cycling, reset, background Edge voice-list download.
+- [x] `OverlayService` menu item `Роли & голоса 🎭`; `speakNow` routes role voice → Edge synthesis (background thread + MediaPlayer) or system TTS with role pitch/rate; automatic Edge fallback when no Russian system voice is installed.
+- [ ] Real-device check: prefer system TTS by default (privacy), Edge only when a role explicitly binds an Edge voice or no Russian system voice exists; verify MP3 plays with foreground service running.
+
 ## Release-only delivery gate
 
 - [x] Change CI from debug packaging to the signed `assembleRelease` variant and upload only `app-release.apk`.

@@ -15,7 +15,9 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.AudioAttributes
 import android.media.ImageReader
+import android.media.MediaPlayer
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Handler
@@ -28,8 +30,11 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
+import kotlinx.coroutines.runBlocking
 
 class OverlayService : Service(), TextToSpeech.OnInitListener {
     companion object {
@@ -180,6 +185,13 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     val cm = getSystemService(ClipboardManager::class.java)
                     cm.setPrimaryClip(ClipData.newPlainText("ot", t)); toast("✓ Скопировано")
                 } else toast("Нет текста")
+            },
+            VerticalMenuView.VerticalItem("Роли & голоса", "🎭") {
+                try {
+                    VoiceRoleDialog.show(this@OverlayService, wm, handler, tts)
+                } catch (e: Exception) {
+                    Log.e(TAG, "VoiceRoleDialog err", e); toast("Ошибка диалога ролей")
+                }
             },
             VerticalMenuView.VerticalItem("История", "🕘") {
                 try { HistoryDialog.show(this, wm) } catch (e: Exception) { Log.e(TAG, "hist err", e) }
@@ -362,21 +374,87 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     }
 
     /* Voice */
-    private fun safeApplyVoice() {
-        try { tts?.let { VoiceHelper.apply(it, voiceKind, voiceName) } } catch (_: Exception) {}
+    private fun safeApplyVoice(kind: VoiceKind = voiceKind, exactName: String? = voiceName) {
+        try { tts?.let { VoiceHelper.apply(it, kind, exactName) } } catch (_: Exception) {}
     }
 
+    /**
+     * Голосовое чтение с учётом ролей: роль (маркер персонажа или пол текста)
+     * определяет голос — системный TTS или сетевой Edge TTS.
+     */
     private fun speakNow(text: String, force: Boolean) {
         if (!force && text == lastSpoken) return
         lastSpoken = text
+
+        val roles = VoiceRoles.load(this)
+        val role = VoiceRoles.resolve(text, voiceKind, roles)
+        val kindForRole = role.gender.toKind() ?: voiceKind
+
+        val key = role.voiceKey
+        if (key.startsWith("edge:")) {
+            speakEdge(key.removePrefix("edge:"), text, role.pitch, role.rate, kindForRole)
+            return
+        }
+
+        val sysName = if (key.startsWith("sys:")) key.removePrefix("sys:") else null
+        if (!ttsReady || VoiceHelper.russianVoices(tts).isEmpty()) {
+            // Системного русского голоса нет → сетевой fallback на голос Edge по полу роли.
+            speakEdge(VoiceCatalog.edgeDefault(kindForRole).shortName, text, role.pitch, role.rate, kindForRole)
+            return
+        }
         handler.post {
             try {
-                if (tts == null || !ttsReady) { toast("TTS не инициализирован"); return@post }
-                safeApplyVoice()
+                safeApplyVoice(kindForRole, sysName)
+                if (sysName == null) tts?.apply {
+                    setPitch(role.pitch); setSpeechRate(role.rate)
+                }
                 val r = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ot")
                 if (r == TextToSpeech.SUCCESS) toast("🔊 Озвучиваю…")
                 else toast("TTS: голос недоступен")
-            } catch (e: Exception) { Log.e(TAG, "speak", e); toast("TTS ошибка") }
+            } catch (e: Exception) {
+                Log.e(TAG, "speak", e); toast("TTS ошибка")
+            }
+        }
+    }
+
+    /** Синтез и проигрывание сетевого голоса Edge TTS (в фоновом потоке). */
+    private fun speakEdge(shortName: String, text: String, pitch: Float, rate: Float, kind: VoiceKind) {
+        toast("🎧 Edge: $shortName")
+        Thread {
+            try {
+                val pitchHz = ((pitch - 1f) * 200f).roundToInt()
+                val ratePercent = ((rate - 1f) * 100f).roundToInt()
+                val file = runBlocking {
+                    EdgeTts.synthesizeToFile(applicationContext, text, shortName, ratePercent, pitchHz)
+                }
+                if (file == null) { toast("Edge TTS: нет сети или сервер недоступен"); return@Thread }
+                playEdgeAudio(file)
+            } catch (e: Exception) {
+                Log.e(TAG, "edge speak", e); toast("Edge TTS: ошибка")
+            }
+        }.start()
+    }
+
+    private fun playEdgeAudio(file: File) {
+        try {
+            val mp = MediaPlayer()
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            mp.setDataSource(file.absolutePath)
+            mp.setOnErrorListener { _, _, _ -> runCatching { file.delete() }; true }
+            mp.setOnPreparedListener { media ->
+                media.start()
+                media.setOnCompletionListener { done -> runCatching { done.release(); file.delete() } }
+            }
+            mp.prepareAsync()
+        } catch (e: Exception) {
+            Log.e(TAG, "edge playback", e)
+            runCatching { file.delete() }
+            toast("Edge TTS: не удалось воспроизвести")
         }
     }
 

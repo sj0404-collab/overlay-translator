@@ -133,6 +133,8 @@ dependencies {
     // 2.1.0 is built with Kotlin 2.2 metadata; the project compiles it with
     // Kotlin 2.2.21 to keep the local LiteRT API binary-compatible.
     implementation("com.google.ai.edge.litert:litert:2.1.0")
+    // Edge TTS (read aloud voices of Microsoft Edge) via its public WebSocket endpoint.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(verifyTsxShell) }
