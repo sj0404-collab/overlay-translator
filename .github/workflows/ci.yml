@@ -64,6 +64,16 @@ jobs:
             test -f "$shell_dir/${asset#./}"
           done
 
+      - name: Verify committed TSX shell is up to date
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(git diff --name-only app/src/main/assets/tsx/ | wc -l)" -ne 0 ]; then
+            echo 'Committed TSX shell is stale -- run `pnpm run build` and commit the result' >&2
+            git diff app/src/main/assets/tsx/ >&2
+            exit 1
+          fi
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 

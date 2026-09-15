@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B1220" />
+    <title>Рамка OCR</title>
+    <script defer src="./assets/index-BSwk8YXZ.js"></script>
+    <link rel="stylesheet" href="./assets/index-DsguqtCk.css">
+  </head>
+  <body>
+    <div id="root"><main style="min-height:100vh;padding:28px;box-sizing:border-box;background:#08111e;color:#edf3ff;font-family:system-ui,sans-serif"><p style="letter-spacing:.16em;font-size:11px;color:#8eb2ff">LOCAL SCREEN READER</p><h1>Рамка OCR</h1><p>Загрузка локального интерфейса…</p></main></div>
+  
+<script>
+(function () {
+  var mounted = function () {
+    return !!(document.querySelector('.shell') || document.querySelector('.overlay-shell'))
+  }
+  window.__tsxMounted = mounted
+  setTimeout(function () {
+    if (mounted()) return
+    var root = document.getElementById('root')
+    if (!root) return
+    root.innerHTML =
+      '<main style="min-height:100vh;padding:28px;box-sizing:border-box;background:#08111e;color:#edf3ff;' +
+      'font-family:system-ui,sans-serif">' +
+      '<p style="letter-spacing:.16em;font-size:11px;color:#8eb2ff">LOCAL SCREEN READER</p>' +
+      '<h1>Не удалось загрузить интерфейс</h1>' +
+      '<p style="color:#ffb4a8">Локальный интерфейс не запустился. Закройте и откройте приложение.</p></main>'
+  }, 8000)
+})()
+</script>
+</body>
+</html>

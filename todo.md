@@ -18,10 +18,11 @@
 
 ## White-screen regression in hybrid APK
 
-- [ ] Reproduce the blank white WebView on the device using candidate `6a574db`.
+- [x] Reproduce the missing-interface state: any APK built from the tabs era (`c974c43`) without `pnpm build` shipped no `assets/tsx/index.html`, so the `Рамка` WebView showed `net::ERR_FILE_NOT_FOUND` («error not found») in both tabs and the whole React UI was absent. Reinstall a current CI APK after the fix below.
 - [x] Root cause: the packaged `tsx/index.html` (Vite output) used `<script type="module" crossorigin>`, and ES modules are CORS-blocked from `file://` in the WebView, so the app shell never mounts. Tag/release builds additionally never built the TSX assets at all because `app/src/main/assets/tsx/` is gitignored. The Gradle `preBuild` task now fails when the shell is missing or still uses ES modules.
 - [x] Verify that the packaged `tsx/index.html`, JavaScript bundle, CSS, and WebView hash route are present and load from Android assets.
 - [x] Fix: `tools/postbuild.mjs` rewrites the build to a classic `<script defer>` (no modules, no `crossorigin`) so the shell loads from `file:///android_asset/tsx/index.html`, and injects a watchdog that shows a visible error if React never mounts.
+- [x] Remove `app/src/main/assets/tsx/` from `.gitignore` and commit the built shell, so any build (local, tag or CI) always packages the interface; CI gains a step that fails when the committed shell is stale relative to `web/`.
 - [x] Add a visible native fallback/error state when the TSX page fails to load instead of leaving a blank screen (`tsxFallback` view with retry in `MainActivity`).
 - [x] Add a startup regression check to the remote GitHub Actions build (classic script, no modules/crossorigin, assets present, watchdog injected) and upload a new APK candidate only after it passes.
 
