@@ -1,5 +1,10 @@
 # Local screen-frame OCR overlay
 
+## Milestone log
+
+- [x] v6.3.0-native: Рамка tab is native, JS bridge removed (see below).
+- [x] v6.4.0-settings: native Settings screen — engine/voice/mode choices. EnginePrefs got real persistence (netMode offline/mixed/combo/online, ttsSource auto/system/edge, autoTranslate, scanLang, regionMode, token accounting). OcrRouter now selects engines by mode (local/glens/zen/googleai/openrouter, offline→local-only, combo→local-then-free-online, online→strict). Translator honors offline mode and counts online tokens. OverlayService passes mode into OCR/translate and honours ttsSource in speakNow.
+
 ## v6.3.0-native: Рамка tab is native, JS bridge removed
 
 - [x] The WebView/TSX frame tab dead-tapped even on the shipped APK: every bridge call threw `Java bridge method can't be invoked on a non-injected object` (WebView JavaBridge regression), so «Открыть настройки», «Разрешить» and «Запустить оверлей» did nothing while the Сайт tab (plain WebView) worked fine.

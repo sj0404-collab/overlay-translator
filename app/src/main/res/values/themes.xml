@@ -5,6 +5,11 @@
         <item name="android:statusBarColor">#0B1220</item>
         <item name="android:navigationBarColor">#0B1220</item>
     </style>
+    <style name="Theme.OverlayTranslator.Dark" parent="Theme.OverlayTranslator">
+        <item name="android:windowBackground">#08111E</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="isLightTheme">false</item>
+    </style>
     <style name="Theme.Transparent" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>

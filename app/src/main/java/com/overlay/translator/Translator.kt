@@ -3,39 +3,45 @@ package com.overlay.translator
 import android.content.Context
 
 /**
- * Translates EN→RU through online engines only.
- * Local dictionary, Local NMT and phrase-bank routes have been removed
- * so the APK stays small (no bundled TSV data / ML Kit model).
+ * Translates EN→RU. In offline mode only the local dictionary is used;
+ * otherwise the selected engine runs, falling back to free online routes.
  */
 class Translator(private val ctx: Context) {
     private val dictionary by lazy { LocalDictionary(ctx) }
 
-    fun translate(text: String, engine: String): String {
+    fun translate(text: String, engine: String, mode: String = EnginePrefs.MODE_MIXED): String {
         val cleaned = text.replace(Regex("\\s+"), " ").trim()
         if (cleaned.isEmpty()) return ""
         if (ScriptDetect.isMostlyCyrillic(cleaned)) return cleaned
-        return when (engine) {
-            "dict" -> dictionary.translateFragment(cleaned)
-            "google" -> MangaTranslatorService.translate(cleaned)
-            "googleai" -> LlmClient.translateGemini(ctx, cleaned)
-                ?: MangaTranslatorService.translate(cleaned)
-            "zen" -> LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
-                ?: MangaTranslatorService.translate(cleaned)
-            "openrouter" -> LlmClient.translateOpenRouter(
-                cleaned,
-                EnginePrefs.openrouterKey(ctx),
-                EnginePrefs.orModel(ctx),
-            )
-                ?: LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
-                ?: MangaTranslatorService.translate(cleaned)
-            "mymemory" -> mymemory(cleaned)
-                ?: MangaTranslatorService.translate(cleaned)
-            else -> { // "auto" — try Zen → Google Translate Free → MyMemory
+        val eff = if (mode == EnginePrefs.MODE_OFFLINE) EnginePrefs.TR_DICT else engine
+        return when (eff) {
+            EnginePrefs.TR_DICT -> dictionary.translateFragment(cleaned)
+            EnginePrefs.TR_GOOGLE -> MangaTranslatorService.translate(cleaned)
+            EnginePrefs.TR_GOOGLE_AI -> onlineTokens(cleaned,
+                LlmClient.translateGemini(ctx, cleaned)
+                    ?: MangaTranslatorService.translate(cleaned))
+            EnginePrefs.TR_ZEN -> onlineTokens(cleaned,
                 LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
-                    ?: MangaTranslatorService.translate(cleaned)
-                    ?: mymemory(cleaned)
+                    ?: MangaTranslatorService.translate(cleaned))
+            EnginePrefs.TR_OPENROUTER -> onlineTokens(cleaned,
+                LlmClient.translateOpenRouter(cleaned, EnginePrefs.openrouterKey(ctx), EnginePrefs.orModel(ctx))
+                    ?: LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
+                    ?: MangaTranslatorService.translate(cleaned))
+            EnginePrefs.TR_MYMEMORY -> mymemory(cleaned)
+                ?: MangaTranslatorService.translate(cleaned)
+            else -> { // "auto" — Zen → Google Translate Free → MyMemory
+                onlineTokens(cleaned,
+                    LlmClient.translateZen(cleaned, EnginePrefs.zenModel(ctx))
+                        ?: MangaTranslatorService.translate(cleaned)
+                        ?: mymemory(cleaned))
             }
         }.let { RuText.clean(it ?: "") }
+    }
+
+    /** Rough token accounting (≈4 chars per token) for online LLM routes. */
+    private fun onlineTokens(text: String, result: String?): String? {
+        EnginePrefs.incrementTokens(ctx, ((text.length / 4) + (result?.length?.div(8) ?: 0)).toLong())
+        return result
     }
 
     @Suppress("SameParameterValue")

@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#08111E"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Настройки"
+            android:textColor="#EAF2FF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Движки, режимы подключения и поведение сканирования."
+            android:textColor="#8EA6C8"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Режим подключения"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#EAF2FF" />
+
+        <TextView
+            android:id="@+id/modeDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:lineSpacingExtra="2dp"
+            android:textColor="#A8B8D2"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="OCR — распознавание текста"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spOcr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#EAF2FF" />
+
+        <TextView
+            android:id="@+id/ocrDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#A8B8D2"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Перевод"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spTr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#EAF2FF" />
+
+        <TextView
+            android:id="@+id/trDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#A8B8D2"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Голос (TTS)"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spTts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#EAF2FF" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Язык текста на экране"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spScanLang"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#EAF2FF" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Поведение сканирования"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <CheckBox
+            android:id="@+id/chLive"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Live-режим: постоянный скан каждые несколько секунд"
+            android:textColor="#E8EEF8" />
+
+        <CheckBox
+            android:id="@+id/chAutoTranslate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Авто-перевод во время Live-скана"
+            android:textColor="#E8EEF8" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Онлайн-движки"
+            android:textColor="#8BA4D9"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Ключи и модели нужны только для платных/личных онлайн-движков. Zen Free и Glens работают без ключа."
+            android:textColor="#A8B8D2"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/inputOpenrouterKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="OpenRouter API-ключ"
+            android:inputType="textPassword"
+            android:singleLine="true"
+            android:textColor="#EAF2FF"
+            android:textColorHint="#5E759B" />
+
+        <EditText
+            android:id="@+id/inputOrModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="OpenRouter модель (напр. openai/gpt-4o-mini)"
+            android:inputType="text"
+            android:singleLine="true"
+            android:textColor="#EAF2FF"
+            android:textColorHint="#5E759B" />
+
+        <EditText
+            android:id="@+id/inputGoogleKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Google AI (Gemini) API-ключ"
+            android:inputType="textPassword"
+            android:singleLine="true"
+            android:textColor="#EAF2FF"
+            android:textColorHint="#5E759B" />
+
+        <EditText
+            android:id="@+id/inputGoogleModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Gemini модель (напр. gemini-2.0-flash)"
+            android:inputType="text"
+            android:singleLine="true"
+            android:textColor="#EAF2FF"
+            android:textColorHint="#5E759B" />
+
+        <EditText
+            android:id="@+id/inputZenModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Zen модель (пусто = стандартная) "
+            android:inputType="text"
+            android:singleLine="true"
+            android:textColor="#EAF2FF"
+            android:textColorHint="#5E759B" />
+
+        <TextView
+            android:id="@+id/tokenUsage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:textColor="#94A3B8"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnTokenReset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#334155"
+            android:minHeight="0dp"
+            android:text="Сбросить счётчик токенов"
+            android:textAllCaps="false"
+            android:textColor="#EAF2FF" />
+    </LinearLayout>
+</ScrollView>

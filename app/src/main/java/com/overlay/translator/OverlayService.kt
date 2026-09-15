@@ -275,8 +275,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                         lastHash = h
                         val router = ocr ?: run { toast("OCR загружается…"); return@Thread }
                         val engine = EnginePrefs.ocr(this)
+                        val mode = EnginePrefs.netMode(this)
                         val lang = scanLang()
-                        var text = router.read(piece, engine, lang).trim()
+                        var text = router.read(piece, engine, lang, mode).trim()
                         text = TextPostprocessor().postprocess(text)
                         // Noise filter: keep Cyrillic lines, filter short ASCII noise
                         text = text.lines().filter { line ->
@@ -317,7 +318,9 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         Thread {
             try {
                 val joined = text.replace('\n', ' ')
-                val cleaned = RuText.clean(translator?.translate(joined, EnginePrefs.tr(this)) ?: text)
+                val cleaned = RuText.clean(
+                    translator?.translate(joined, EnginePrefs.tr(this), EnginePrefs.netMode(this)) ?: text,
+                )
                 lastTr = cleaned
                 toast("✓ ${cleaned.take(60)}")
                 postResultNotification(text, cleaned)
@@ -390,15 +393,32 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         val role = VoiceRoles.resolve(text, voiceKind, roles)
         val kindForRole = role.gender.toKind() ?: voiceKind
 
+        val source = EnginePrefs.ttsSource(this)
         val key = role.voiceKey
-        if (key.startsWith("edge:")) {
-            speakEdge(key.removePrefix("edge:"), text, role.pitch, role.rate, kindForRole)
+
+        // TTS source preference: edge -> always Edge; system -> only system
+        // voice; auto -> follow the role binding (Edge for "edge:" keys).
+        val wantEdge = when (source) {
+            EnginePrefs.TTS_EDGE -> true
+            EnginePrefs.TTS_SYSTEM -> false
+            else -> key.startsWith("edge:")
+        }
+        if (wantEdge) {
+            val shortName = key.removePrefix("edge:")
+                .takeIf { it.isNotBlank() }
+                ?: VoiceCatalog.edgeDefault(kindForRole).shortName
+            speakEdge(shortName, text, role.pitch, role.rate, kindForRole)
             return
         }
 
         val sysName = if (key.startsWith("sys:")) key.removePrefix("sys:") else null
         if (!ttsReady || VoiceHelper.russianVoices(tts).isEmpty()) {
-            // Системного русского голоса нет → сетевой fallback на голос Edge по полу роли.
+            // Системного русского голоса нет. В режиме system — молча,
+            // иначе сетевой fallback на голос Edge по полу роли.
+            if (source == EnginePrefs.TTS_SYSTEM) {
+                toast("Системный русский голос не установлен")
+                return
+            }
             speakEdge(VoiceCatalog.edgeDefault(kindForRole).shortName, text, role.pitch, role.rate, kindForRole)
             return
         }

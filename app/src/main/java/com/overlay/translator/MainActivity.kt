@@ -102,6 +102,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.tabFrame).setOnClickListener { showScreen("frame") }
         findViewById<View>(R.id.tabSite).setOnClickListener { showScreen("site") }
 
+        findViewById<View>(R.id.btnSettings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
         updateFrameUi()
     }
 

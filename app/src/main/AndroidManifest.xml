@@ -35,6 +35,12 @@
             android:exported="false"
             android:theme="@style/Theme.Transparent" />
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.OverlayTranslator.Dark" />
+
         <service
             android:name=".OverlayService"
             android:exported="false"

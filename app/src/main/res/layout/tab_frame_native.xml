@@ -261,4 +261,17 @@
             android:textColor="#94A3B8"
             android:textSize="12sp" />
     </LinearLayout>
+
+    <Button
+        android:id="@+id/btnSettings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#243B5E"
+        android:minHeight="0dp"
+        android:text="⚙ Настройки движков"
+        android:textAllCaps="false"
+        android:textColor="#EAF2FF"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 </LinearLayout>
