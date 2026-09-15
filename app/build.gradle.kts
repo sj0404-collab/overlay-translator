@@ -82,8 +82,8 @@ android {
         applicationId = "com.overlay.translator"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "6.2.0-screenocr"
+        versionCode = 16
+        versionName = "6.3.0-native"
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

@@ -3,27 +3,28 @@ package com.overlay.translator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import org.json.JSONObject
 
 /**
- * APK shell for the TSX user interface. The WebView is intentionally limited
- * to packaged local assets; Android-only operations remain explicit bridge
- * calls that the user initiates from the TSX screen.
+ * Main window shell. The "Рамка" tab is a native control panel (overlay and
+ * capture permissions, start/stop of the floating overlay); the "Сайт" tab is
+ * a WebView browser for translating web pages. Android-only operations are
+ * driven by native buttons instead of a JS bridge.
  */
 class MainActivity : AppCompatActivity() {
-    private lateinit var web: WebView
     private lateinit var siteWeb: WebView
     private lateinit var urlField: android.widget.EditText
 
@@ -32,61 +33,50 @@ class MainActivity : AppCompatActivity() {
             OverlayService.projectionResultCode = result.resultCode
             OverlayService.projectionData = result.data
         }
-        publishNativeState()
-    }
-
-    private fun loadTsx() {
-        findViewById<View>(R.id.tsxFallback).visibility = View.GONE
-        web.visibility = View.VISIBLE
-        web.loadUrl("file:///android_asset/tsx/index.html")
-        web.postDelayed({ verifyTsxMounted() }, 3000)
-    }
-
-    /** Reveals a native error state when the TSX page exists but React never mounted. */
-    private fun verifyTsxMounted() {
-        if (findViewById<View>(R.id.tsxFallback).visibility == View.VISIBLE) return
-        web.evaluateJavascript(
-            "Boolean(window.__tsxMounted ? window.__tsxMounted() : (document.querySelector('.shell') || document.querySelector('.overlay-shell')))",
-        ) { mounted ->
-            runOnUiThread {
-                if (mounted == "true") return@runOnUiThread
-                // One retry before declaring failure so slow first loads are not a false error.
-                web.postDelayed({
-                    web.evaluateJavascript(
-                        "Boolean(window.__tsxMounted ? window.__tsxMounted() : (document.querySelector('.shell') || document.querySelector('.overlay-shell')))",
-                    ) { again -> if (again != "true") showTsxFallback() }
-                }, 4000)
-            }
-        }
-    }
-
-    private fun showTsxFallback() {
-        web.visibility = View.GONE
-        findViewById<View>(R.id.tsxFallback).visibility = View.VISIBLE
+        updateFrameUi()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        web = findViewById(R.id.tsxWeb)
-        web.settings.javaScriptEnabled = true
-        web.settings.domStorageEnabled = false
-        web.settings.allowFileAccess = true
-        web.settings.allowContentAccess = false
-        web.setBackgroundColor(android.graphics.Color.rgb(8, 17, 30))
-        web.webViewClient = object : WebViewClient() {
-            override fun onReceivedError(
-                view: WebView,
-                request: android.webkit.WebResourceRequest,
-                error: android.webkit.WebResourceError,
-            ) {
-                if (request.isForMainFrame) runOnUiThread { showTsxFallback() }
+
+        findViewById<View>(R.id.btnOverlayStep).setOnClickListener {
+            if (!Settings.canDrawOverlays(this)) {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName"),
+                    ),
+                )
             }
+            updateFrameUi()
         }
-        web.addJavascriptInterface(OverlayNativeBridge(), "OverlayNative")
-        loadTsx()
-        findViewById<View>(R.id.tsxRetry).setOnClickListener { loadTsx() }
+
+        findViewById<View>(R.id.btnCaptureStep).setOnClickListener {
+            if (OverlayService.projectionData == null) {
+                val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                capture.launch(manager.createScreenCaptureIntent())
+            }
+            updateFrameUi()
+        }
+
+        findViewById<View>(R.id.btnStart).setOnClickListener {
+            if (OverlayService.isRunning) {
+                startService(Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
+                updateFrameUi()
+                return@setOnClickListener
+            }
+            if (!Settings.canDrawOverlays(this) || OverlayService.projectionData == null) {
+                updateFrameUi()
+                return@setOnClickListener
+            }
+            startForegroundService(Intent(this, OverlayService::class.java).apply {
+                action = OverlayService.ACTION_START
+            })
+            updateFrameUi()
+            moveTaskToBack(true)
+        }
 
         siteWeb = findViewById(R.id.siteWeb)
         with(siteWeb.settings) {
@@ -111,6 +101,50 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.tabFrame).setOnClickListener { showScreen("frame") }
         findViewById<View>(R.id.tabSite).setOnClickListener { showScreen("site") }
+
+        updateFrameUi()
+    }
+
+    private fun updateFrameUi() {
+        val overlayGranted = Settings.canDrawOverlays(this)
+        val captureGranted = OverlayService.projectionData != null
+        val running = OverlayService.isRunning
+        val ready = overlayGranted && captureGranted
+
+        val readyColor = "#22C55E"
+        val idleColor = "#8EA6C8"
+        val readyGreen = ColorStateList.valueOf(android.graphics.Color.parseColor(readyColor))
+        val idleSlate = ColorStateList.valueOf(android.graphics.Color.parseColor(idleColor))
+
+        val stepNum1 = findViewById<TextView>(R.id.stepOverlayNum)
+        val stepBtn1 = findViewById<Button>(R.id.btnOverlayStep)
+        val stepNum2 = findViewById<TextView>(R.id.stepCaptureNum)
+        val stepBtn2 = findViewById<Button>(R.id.btnCaptureStep)
+        val startBtn = findViewById<Button>(R.id.btnStart)
+        val dot = findViewById<View>(R.id.footerDot)
+        val footer = findViewById<TextView>(R.id.footerText)
+
+        stepNum1.text = if (overlayGranted) "✓" else "01"
+        stepNum1.setTextColor(android.graphics.Color.parseColor(if (overlayGranted) readyColor else idleColor))
+        stepNum1.backgroundTintList = if (overlayGranted) readyGreen else idleSlate
+        stepBtn1.text = if (overlayGranted) "Разрешено" else "Открыть настройки"
+        stepBtn1.isEnabled = !overlayGranted
+
+        stepNum2.text = if (captureGranted) "✓" else "02"
+        stepNum2.setTextColor(android.graphics.Color.parseColor(if (captureGranted) readyColor else idleColor))
+        stepNum2.backgroundTintList = if (captureGranted) readyGreen else idleSlate
+        stepBtn2.text = if (captureGranted) "Разрешено" else "Разрешить"
+        stepBtn2.isEnabled = !captureGranted
+
+        startBtn.text = if (running) "Остановить оверлей" else "Запустить оверлей"
+        startBtn.isEnabled = ready
+
+        dot.backgroundTintList = if (ready) readyGreen else idleSlate
+        footer.text = if (ready) {
+            "Готово: запустите поверх страницы и нажмите «Рамка»."
+        } else {
+            "Сначала выдайте два разрешения."
+        }
     }
 
     private fun showScreen(which: String) {
@@ -156,66 +190,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        publishNativeState()
-    }
-
-    private fun stateJson(): String = JSONObject().apply {
-        put("overlay", Settings.canDrawOverlays(this@MainActivity))
-        put("capture", OverlayService.projectionData != null)
-        put("running", OverlayService.isRunning)
-    }.toString()
-
-    private fun publishNativeState() {
-        if (!::web.isInitialized) return
-        val state = JSONObject.quote(stateJson())
-        web.post { web.evaluateJavascript("window.onOverlayNativeState?.($state)", null) }
-    }
-
-    private inner class OverlayNativeBridge {
-        @JavascriptInterface
-        fun state(): String = stateJson()
-
-        @JavascriptInterface
-        fun requestOverlay() {
-            runOnUiThread {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName"),
-                    ),
-                )
-            }
-        }
-
-        @JavascriptInterface
-        fun requestCapture() {
-            runOnUiThread {
-                val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                capture.launch(manager.createScreenCaptureIntent())
-            }
-        }
-
-        @JavascriptInterface
-        fun startOverlay() {
-            runOnUiThread {
-                if (!Settings.canDrawOverlays(this@MainActivity) || OverlayService.projectionData == null) {
-                    publishNativeState()
-                    return@runOnUiThread
-                }
-                startForegroundService(Intent(this@MainActivity, OverlayService::class.java).apply {
-                    action = OverlayService.ACTION_START
-                })
-                publishNativeState()
-                moveTaskToBack(true)
-            }
-        }
-
-        @JavascriptInterface
-        fun stopOverlay() {
-            runOnUiThread {
-                startService(Intent(this@MainActivity, OverlayService::class.java).setAction(OverlayService.ACTION_STOP))
-                publishNativeState()
-            }
-        }
+        updateFrameUi()
     }
 }

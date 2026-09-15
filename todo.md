@@ -1,5 +1,12 @@
 # Local screen-frame OCR overlay
 
+## v6.3.0-native: Рамка tab is native, JS bridge removed
+
+- [x] The WebView/TSX frame tab dead-tapped even on the shipped APK: every bridge call threw `Java bridge method can't be invoked on a non-injected object` (WebView JavaBridge regression), so «Открыть настройки», «Разрешить» and «Запустить оверлей» did nothing while the Сайт tab (plain WebView) worked fine.
+- [x] Fix: replace the `Рамка` tab content (`tsxWeb` WebView + `tsxFallback`) with a native control panel (`tab_frame_native.xml`): two permission steps with live status (`✓`/01·02), start/stop overlay, privacy card and status footer. MainActivity now wires native buttons to `Settings.ACTION_MANAGE_OVERLAY_PERMISSION`, `MediaProjectionManager.createScreenCaptureIntent()` and `OverlayService` ACTION_START/ACTION_STOP; no `addJavascriptInterface` remains.
+- [x] Verified on emulator (API 35): tap «Открыть настройки» opens the system overlay screen, tap «Разрешить» opens the MediaProjection consent + app selector, state refreshes to `✓ Разрешено` and enables «Запустить оверлей».
+- [x] Version bumped to 6.3.0-native (versionCode 16).
+
 - [x] Identify `sj0404-collab/overlay-translator` as the dedicated Android overlay source baseline.
 - [x] Confirm the existing project already has Android overlay permission, `MediaProjection`, a foreground service, manual frame selection and Russian system TTS wiring.
 - [x] Document the requirement that only a user-drawn screen frame is OCR input; no full-display fallback and no cloud OCR transfer.
