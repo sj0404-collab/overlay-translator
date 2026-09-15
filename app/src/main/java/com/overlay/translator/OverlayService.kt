@@ -23,6 +23,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.util.DisplayMetrics
 import android.util.Log
@@ -56,6 +57,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var menu: VerticalMenuView? = null
     private var menuLp: WindowManager.LayoutParams? = null
     private var regionView: RegionView? = null
+    private var regionOutline: FrameOutlineView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var ocr: OcrRouter? = null
@@ -63,7 +65,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private var voiceKind = VoiceKind.FEMALE
     private var voiceName: String? = null
     private var region: RectF? = null
-    private var regionPreset = "rect" // Manual page frame only in local build.
+    private var regionPreset = "page" // FramePresets id or "rect" for manual.
     private var autoTranslate = false
     private var lastOcr = ""
     private var lastTr = ""
@@ -117,6 +119,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                 if (ttsReady) safeApplyVoice()
                 bindProjection()
                 showMenu()
+                restoreRegion()
                 handler.removeCallbacks(tick); handler.post(tick)
             }
             ACTION_REBIND -> bindProjection()
@@ -151,7 +154,15 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     private fun showMenu() {
         if (menu != null) return
         val items = listOf(
-            VerticalMenuView.VerticalItem("Рамка страницы", "📐") { startRegionPick() },
+            VerticalMenuView.VerticalItem("Рамка • пресет", "📐") {
+                try {
+                    FrameDialog.show(this, wm, EnginePrefs.regionMode(this)) { p ->
+                        if (p == null) startRegionPick() else applyPreset(p)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "frame dialog err", e); toast("Ошибка")
+                }
+            },
             VerticalMenuView.VerticalItem("Скан рамки", "🔍") {
                 if (region != null) captureThen(ocrOnly = false) else startRegionPick()
             },
@@ -223,14 +234,108 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
-        rv.onPicked = { r ->
-            region = r; regionPreset = "rect"
-            EnginePrefs.setRegionMode(this, "rect")
-            try { wm.removeView(rv) } catch (_: Exception) {}
-            regionView = null; menu?.visibility = View.VISIBLE
-            toast("Область выбрана")
-        }
+        rv.onPicked = { r -> applyPicked(r) }
         wm.addView(rv, lp)
+    }
+
+    /** Apply a free-drawn rect, pushing it inside the safe area (bars and gestures). */
+    private fun applyPicked(r: RectF) {
+        withInsets { top, bottom ->
+            val safeT = top.toFloat()
+            val safeB = (screenH - bottom).coerceAtLeast(top + 1).toFloat()
+            val out = RectF(r)
+            var clamped = false
+            if (out.top < safeT) { out.top = safeT; clamped = true }
+            if (out.bottom > safeB) { out.bottom = safeB; clamped = true }
+            if (out.left < 0f) { out.left = 0f; clamped = true }
+            if (out.right > screenW) { out.right = screenW.toFloat(); clamped = true }
+            if (out.width() < 8 || out.height() < 8) { toast("Область слишком мала"); return@withInsets }
+            finishPick(out, "rect", if (clamped) "Область сдвинута в безопасную зону" else "Область выбрана")
+        }
+    }
+
+    /** Instant-apply a scenario preset inside the safe area. */
+    private fun applyPreset(p: FramePresets.Preset) {
+        withInsets { top, bottom ->
+            finishPick(
+                FramePresets.compute(p, screenW, screenH, top, bottom),
+                p.id, "Рамка: ${p.label}",
+            )
+        }
+    }
+
+    private fun finishPick(r: RectF, preset: String, msg: String) {
+        region = r; regionPreset = preset
+        EnginePrefs.setRegionMode(this, preset)
+        EnginePrefs.setRegionRect(this, r)
+        regionView?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
+        regionView = null; menu?.visibility = View.VISIBLE
+        showOutline()
+        toast(msg)
+    }
+
+    /** Read system bars + gesture insets via a temporary probe overlay window. */
+    private fun withInsets(cb: (top: Int, bottom: Int) -> Unit) {
+        val tmp = View(this)
+        val lp = WindowManager.LayoutParams(
+            1, 1,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        try {
+            wm.addView(tmp, lp)
+            tmp.post {
+                val ins = tmp.rootWindowInsets
+                val top = ins?.systemWindowInsetTop ?: 0
+                val bottom = if (Build.VERSION.SDK_INT >= 29) {
+                    val b = ins?.systemWindowInsetBottom ?: 0
+                    val g = ins?.mandatorySystemGestureInsets?.bottom ?: 0
+                    maxOf(b, g)
+                } else (ins?.systemWindowInsetBottom ?: 0)
+                try { wm.removeView(tmp) } catch (_: Exception) {}
+                cb(top, bottom)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "insets probe failed", e); cb(0, 0)
+        }
+    }
+
+    /** Rebuild the region after service restart from prefs (preset or saved rect). */
+    private fun restoreRegion() {
+        val mode = EnginePrefs.regionMode(this)
+        withInsets { top, bottom ->
+            val p = FramePresets.byId(mode)
+            region = when {
+                p != null -> FramePresets.compute(p, screenW, screenH, top, bottom)
+                else -> EnginePrefs.regionRect(this)
+            }
+            regionPreset = if (p != null) p.id else "rect"
+            if (region != null) showOutline()
+        }
+    }
+
+    /** Persistent thin outline of the active region, visible over any app. */
+    private fun showOutline() {
+        val r = region ?: return
+        regionOutline?.let { v ->
+            try { wm.removeView(v) } catch (_: Exception) {}
+            regionOutline = null
+        }
+        val ov = FrameOutlineView(this, FramePresets.byId(regionPreset)?.label ?: "Область")
+        ov.rect = RectF(r)
+        val lp = WindowManager.LayoutParams(
+            screenW, screenH,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        try {
+            wm.addView(ov, lp); regionOutline = ov
+        } catch (e: Exception) { Log.e(TAG, "outline add", e) }
     }
 
     /** Brief on-screen status */
@@ -264,6 +369,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
         }
         if (!busy.compareAndSet(false, true)) return
         menu?.visibility = View.INVISIBLE
+        regionOutline?.visibility = View.INVISIBLE
         handler.postDelayed({
             Thread {
                 try {
@@ -305,7 +411,10 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
                     Log.e(TAG, "scan error", e); if (!livePass) toast("Ошибка: ${e.message?.take(50)}")
                 } finally {
                     busy.set(false)
-                    handler.post { menu?.visibility = View.VISIBLE }
+                    handler.post {
+                        menu?.visibility = View.VISIBLE
+                        regionOutline?.visibility = View.VISIBLE
+                    }
                 }
             }.start()
         }, 250)
@@ -507,7 +616,7 @@ class OverlayService : Service(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         isRunning = false
         handler.removeCallbacks(tick)
-        listOf(menu, regionView).forEach { v ->
+        listOf(menu, regionView, regionOutline).forEach { v ->
             try { v?.let { wm.removeView(it) } } catch (_: Exception) {}
         }
         vdisplay?.release(); reader?.close(); projection?.stop()

@@ -1,6 +1,7 @@
 package com.overlay.translator
 
 import android.content.Context
+import android.graphics.RectF
 
 /**
  * User-editable engine and mode preferences. Every value persists in
@@ -66,9 +67,22 @@ object EnginePrefs {
     fun scanLang(ctx: Context) = sp(ctx).getString("scan_lang", "AUTO") ?: "AUTO"
     fun setScanLang(ctx: Context, v: String) = sp(ctx).edit().putString("scan_lang", v).apply()
 
-    // Frame behavior: "auto" (fit content area, insets removed), "rect" (manual).
+    // Frame behavior: "auto" (fit content area, insets removed), "rect" (manual),
+    // or a FramePresets id like "page"/"chat"/"subs"/"article".
     fun regionMode(ctx: Context) = sp(ctx).getString("region_mode", "auto") ?: "auto"
     fun setRegionMode(ctx: Context, v: String) = sp(ctx).edit().putString("region_mode", v).apply()
+
+    // Last picked frame rect (screen coordinates), survives service restarts.
+    fun regionRect(ctx: Context): RectF? {
+        val s = sp(ctx).getString("region_rect", "") ?: return null
+        val parts = s.split(",")
+        if (parts.size != 4) return null
+        return try {
+            RectF(parts[0].toFloat(), parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat())
+        } catch (_: Exception) { null }
+    }
+    fun setRegionRect(ctx: Context, r: RectF) =
+        sp(ctx).edit().putString("region_rect", "${r.left},${r.top},${r.right},${r.bottom}").apply()
 
     // Online engine credentials. Never shipped; user-configured.
     fun googleApiKey(ctx: Context) = sp(ctx).getString("google_api_key", "") ?: ""
