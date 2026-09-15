@@ -17,7 +17,8 @@ object ScanHistory {
     private const val KEY = "scans"
     private const val MAX = 50
 
-    private data class Entry(val time: Long, val ocr: String, val tr: String, val engine: String)
+    /** One history entry: human-readable full timestamp, OCR text, translation, engine id. */
+    data class Item(val time: String, val ocr: String, val tr: String, val engine: String)
 
     fun add(ctx: Context, ocr: String, tr: String, engine: String) {
         val sp = ctx.getSharedPreferences(PREFS, 0)
@@ -33,15 +34,15 @@ object ScanHistory {
         sp.edit().putString(KEY, arr.toString()).apply()
     }
 
-    fun recent(ctx: Context, count: Int = 10): List<Triple<String, String, String>> {
+    fun recent(ctx: Context, count: Int = 30): List<Item> {
         val arr = load(ctx.getSharedPreferences(PREFS, 0))
-        val out = mutableListOf<Triple<String, String, String>>()
+        val out = mutableListOf<Item>()
+        val fmt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
         for (i in (arr.length() - 1).coerceAtLeast(0) downTo (arr.length() - count).coerceAtLeast(0)) {
             val obj = arr.optJSONObject(i) ?: continue
             val ts = obj.optLong("t", 0)
-            val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
             val time = if (ts > 0) fmt.format(Date(ts)) else "?"
-            out.add(Triple(time, obj.optString("o", ""), obj.optString("tr", "")))
+            out.add(Item(time, obj.optString("o", ""), obj.optString("tr", ""), obj.optString("e", "")))
         }
         return out
     }

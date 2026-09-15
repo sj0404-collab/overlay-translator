@@ -56,8 +56,7 @@ object HistoryDialog {
             }
             val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
             for (item in items) {
-                val (time, ocr, tr) = item
-                list.addView(buildEntry(ctx, time, ocr, tr))
+                list.addView(buildEntry(ctx, item))
                 list.addView(LinearLayout(ctx).apply {
                     setBackgroundColor(0xFF334155.toInt())
                     layoutParams = LinearLayout.LayoutParams(
@@ -86,7 +85,9 @@ object HistoryDialog {
             (ctx.resources.displayMetrics.heightPixels * 0.7f).toInt())
     }
 
-    private fun buildEntry(ctx: Context, time: String, ocr: String, tr: String): LinearLayout {
+    private fun buildEntry(ctx: Context, item: ScanHistory.Item): LinearLayout {
+        val ocr = item.ocr
+        val tr = item.tr
         val wrap = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 12, 20, 12)
@@ -94,7 +95,7 @@ object HistoryDialog {
         }
 
         wrap.addView(TextView(ctx).apply {
-            text = "⏰ $time"
+            text = "⏰ ${item.time} · ${EngineUi.ocrLabel(item.engine)}"
             setTextColor(0xFF64748B.toInt()); textSize = 11f
         })
 
