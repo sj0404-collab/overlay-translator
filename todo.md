@@ -4,6 +4,8 @@
 
 - [x] v6.3.0-native: Рамка tab is native, JS bridge removed (see below).
 - [x] v6.4.0-settings: native Settings screen — engine/voice/mode choices. EnginePrefs got real persistence (netMode offline/mixed/combo/online, ttsSource auto/system/edge, autoTranslate, scanLang, regionMode, token accounting). OcrRouter now selects engines by mode (local/glens/zen/googleai/openrouter, offline→local-only, combo→local-then-free-online, online→strict). Translator honors offline mode and counts online tokens. OverlayService passes mode into OCR/translate and honours ttsSource in speakNow.
+- [x] v6.5.0-history: ScanHistory shows full date (dd.MM.yyyy HH:mm) + engine label in the dialog.
+- [x] v6.6.0-frames: frame presets per scenario (Страница/Чат/Субтитры/Статья) via new overlay dialog, free-form pick, safe-area clamping (status bar + gesture/nav insets), persistent outline window visible over any app including web pages, region persists across restart.
 
 ## v6.3.0-native: Рамка tab is native, JS bridge removed
 
